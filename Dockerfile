@@ -1,18 +1,20 @@
-# Base image (stick to 3.11 due to NumPy 1.26 pin and broad compatibility)
-FROM python:3.11-slim
+# Base image (Python 3.12 for PyO3/tiktoken compatibility)
+FROM python:3.12-slim
 
 # Environment settings for predictable Python behavior
 ENV PYTHONDONTWRITEBYTECODE=1 \
-        PYTHONUNBUFFERED=1 \
-        PIP_NO_CACHE_DIR=1
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (curl for healthcheck, gcc for any wheels that need compile)
+# Install system dependencies (curl for healthcheck, gcc + python dev for wheels)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        gcc \
-        curl \
+    gcc \
+    build-essential \
+    python3-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry 2.x to match lock format (supports PEP 621 [project])
