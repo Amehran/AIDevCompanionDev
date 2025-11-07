@@ -1,0 +1,25 @@
+# Do not send secrets or VCS to the Docker build context
+.env
+*.env
+
+# VCS
+.git
+.gitignore
+
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.venv/
+venv/
+ENV/
+.envrc
+
+# OS files
+.DS_Store
+
+# Tests and notebooks (optional)
+.ipynb_checkpoints/
