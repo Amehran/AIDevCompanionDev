@@ -14,9 +14,9 @@ sys.stderr = sys.__stderr__
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     stream=sys.stderr,
-    force=True
+    force=True,
 )
 logger = logging.getLogger(__name__)
 
@@ -24,13 +24,17 @@ load_dotenv()
 
 app = FastAPI()
 
+
 # Lightweight logging (avoid consuming body so external POST works)
 @app.middleware("http")
 async def basic_logging(request, call_next):
     logger.info(f"Incoming {request.method} {request.url.path}")
     response = await call_next(request)
-    logger.info(f"Completed {request.method} {request.url.path} -> {response.status_code}")
+    logger.info(
+        f"Completed {request.method} {request.url.path} -> {response.status_code}"
+    )
     return response
+
 
 @app.get("/")
 async def root():
@@ -50,14 +54,17 @@ class ChatRequest(BaseModel):
     # Add optional fields as needed in the future
     extra: Optional[Dict[str, Any]] = None
 
+
 class Issue(BaseModel):
     type: Optional[str]
     description: Optional[str]
     suggestion: Optional[str]
 
+
 class ChatResponse(BaseModel):
     summary: Optional[str]
     issues: Optional[list[Issue]]
+
 
 @app.post("/echo")
 async def echo(payload: Dict[str, Any]):
@@ -75,7 +82,9 @@ async def chat(body: ChatRequest):
     code = body.source_code or body.code_snippet
     if not code:
         logger.error("No code provided in request")
-        raise HTTPException(status_code=422, detail="Provide 'source_code' or 'code_snippet'.")
+        raise HTTPException(
+            status_code=422, detail="Provide 'source_code' or 'code_snippet'."
+        )
 
     try:
         logger.info(f"Building crew for code: {code[:50]}...")
@@ -88,6 +97,7 @@ async def chat(body: ChatRequest):
 
         # raw_result may already be JSON string; attempt to parse
         import json
+
         parsed = None
         try:
             parsed = json.loads(str(raw_result))
@@ -101,14 +111,17 @@ async def chat(body: ChatRequest):
         if isinstance(parsed, dict) and isinstance(parsed.get("issues"), list):
             for item in parsed["issues"]:
                 if isinstance(item, dict):
-                    issues.append(Issue(
-                        type=item.get("type"),
-                        description=item.get("description"),
-                        suggestion=item.get("suggestion")
-                    ))
+                    issues.append(
+                        Issue(
+                            type=item.get("type"),
+                            description=item.get("description"),
+                            suggestion=item.get("suggestion"),
+                        )
+                    )
         return ChatResponse(summary=summary, issues=issues)
     except Exception as e:
         import traceback
+
         logger.error(f"ERROR in /chat: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
