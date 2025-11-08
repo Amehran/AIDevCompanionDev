@@ -1,17 +1,26 @@
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Depends
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
-import uuid
-import time
-import threading
-from pydantic import BaseModel
 from dotenv import load_dotenv
 from typing import Any, Dict, Optional
 import sys
 import logging
-import os
 
 from src.crew import CodeReviewProject  # type: ignore
+from app.core.config import Settings, get_settings, settings
+from app.core.di import rate_limiter, job_manager
+from app.api.health import router as health_router
+from app.api.chat import router as chat_router
+from app.api.jobs import router as jobs_router
+from app.core.error_handlers import register_exception_handlers
+# Structured exceptions available for future use
+# Placeholder: structured exceptions available for future integration
+# (Removed unused imports to satisfy lint.)
+from app.domain.models import (
+    ChatRequest,
+    ChatResponse,
+    Issue,
+)
 
 # Force unbuffered output
 sys.stdout = sys.__stdout__
@@ -29,6 +38,13 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 app = FastAPI()
+# Initialize services (use DI singletons)
+
+# Expose internal state for tests (back-compat with tests/test_api.py)
+_rate_lock = rate_limiter._lock  # type: ignore[attr-defined]
+_rate_buckets = rate_limiter.buckets
+_jobs_lock = job_manager._lock  # type: ignore[attr-defined]
+_jobs = job_manager.jobs
 
 
 # Lightweight logging (avoid consuming body so external POST works)
@@ -50,6 +66,13 @@ async def basic_logging(request, call_next):
         logger.error(traceback.format_exc())
         raise
 
+register_exception_handlers(app)
+
+# Include routers
+app.include_router(health_router)
+app.include_router(chat_router)
+app.include_router(jobs_router)
+
 
 @app.get("/")
 async def root():
@@ -60,25 +83,6 @@ async def root():
 async def test_post():
     print("=== TEST POST received ===", flush=True)
     return {"status": "ok"}
-
-
-class ChatRequest(BaseModel):
-    # Accept either field for compatibility
-    source_code: Optional[str] = None
-    code_snippet: Optional[str] = None
-    # Add optional fields as needed in the future
-    extra: Optional[Dict[str, Any]] = None
-
-
-class Issue(BaseModel):
-    type: Optional[str]
-    description: Optional[str]
-    suggestion: Optional[str]
-
-
-class ChatResponse(BaseModel):
-    summary: Optional[str]
-    issues: Optional[list[Issue]]
 
 
 @app.post("/echo")
@@ -93,13 +97,11 @@ async def chat(
     fast: bool = Query(
         False, description="Return quick stub response for connectivity testing"
     ),
+    settings: Settings = Depends(get_settings),
 ):
     logger.info("=== POST /chat received ===")
     logger.info(f"Request body: {body}")
-    logger.info(f"source_code: {body.source_code}")
-    logger.info(f"code_snippet: {body.code_snippet}")
-    # Support both 'source_code' and legacy 'code_snippet'
-    code = body.source_code or body.code_snippet
+    code = body.get_code()
     if not code:
         logger.error("No code provided in request")
         raise HTTPException(
@@ -169,37 +171,21 @@ async def chat(
 # =========================
 
 JobRecord = Dict[str, Any]
-_jobs: Dict[str, JobRecord] = {}
-_jobs_lock = threading.Lock()
-
-
-def _store_job(job_id: str, record: JobRecord) -> None:
-    with _jobs_lock:
-        _jobs[job_id] = record
 
 
 def _get_job(job_id: str) -> Optional[JobRecord]:
-    with _jobs_lock:
-        return _jobs.get(job_id)
+    return job_manager.get(job_id)
 
 
 def _cleanup_jobs(ttl_seconds: int = 3600) -> int:
-    now = time.time()
-    removed = 0
-    with _jobs_lock:
-        stale = [
-            jid
-            for jid, rec in _jobs.items()
-            if now - rec.get("created_at", now) > ttl_seconds
-        ]
-        for jid in stale:
-            _jobs.pop(jid, None)
-            removed += 1
-    return removed
+    return job_manager.cleanup(ttl_seconds)
 
 
 async def _analyze_code_to_response(code: str) -> ChatResponse:
     logger.info(f"[job] Analyzing code len={len(code)}")
+    # Test-mode shortcut: when using a dummy/test API key, avoid real LLM calls
+    if (settings.openai_api_key or "").lower() in {"dummy", "test", "placeholder"}:
+        return ChatResponse(summary="OK (test mode)", issues=[])
     project = CodeReviewProject()
     crew = project.code_review_crew()
     raw_result = await run_in_threadpool(
@@ -231,40 +217,20 @@ async def _analyze_code_to_response(code: str) -> ChatResponse:
 # Rate limiting helpers
 # =========================
 
-RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "10"))
-MAX_CONCURRENT_JOBS = int(os.getenv("MAX_CONCURRENT_JOBS", "100"))
-
-_rate_lock = threading.Lock()
-_rate_buckets: Dict[str, Dict[str, Any]] = {}
-
 
 def _rate_limit_check(ip: str) -> Optional[int]:
     """Return retry_after seconds if limited, else None."""
-    now = time.time()
-    window = 60.0
-    with _rate_lock:
-        b = _rate_buckets.get(ip)
-        if not b:
-            _rate_buckets[ip] = {"count": 1, "reset": now + window}
-            return None
-        if now > b["reset"]:
-            b["count"], b["reset"] = 1, now + window
-            return None
-        if b["count"] >= RATE_LIMIT_PER_MINUTE:
-            return max(1, int(b["reset"] - now))
-        b["count"] += 1
-        return None
+    return rate_limiter.check(ip)
 
 
 def _active_jobs_count() -> int:
-    with _jobs_lock:
-        return sum(
-            1 for j in _jobs.values() if j.get("status") in {"queued", "running"}
-        )
+    return job_manager.active_count()
 
 
 @app.post("/chat/submit")
-async def submit_chat(request: Request, body: ChatRequest) -> Dict[str, str]:
+async def submit_chat(
+    request: Request, body: ChatRequest, settings: Settings = Depends(get_settings)
+) -> Dict[str, str]:
     # Per-IP rate limiting (fixed 60s window)
     ip = request.client.host if request.client else "unknown"
     retry_after = _rate_limit_check(ip)
@@ -282,14 +248,14 @@ async def submit_chat(request: Request, body: ChatRequest) -> Dict[str, str]:
 
     # Global concurrent jobs guard
     active = _active_jobs_count()
-    if active >= MAX_CONCURRENT_JOBS:
+    if active >= settings.max_concurrent_jobs:
         payload = {
             "error": {
                 "type": "server_busy",
                 "message": "Server is busy. Please try again shortly.",
                 "details": {
                     "active_jobs": active,
-                    "max_concurrent": MAX_CONCURRENT_JOBS,
+                    "max_concurrent": settings.max_concurrent_jobs,
                 },
             }
         }
@@ -301,31 +267,13 @@ async def submit_chat(request: Request, body: ChatRequest) -> Dict[str, str]:
             status_code=422, detail="Provide 'source_code' or 'code_snippet'."
         )
 
-    job_id = str(uuid.uuid4())
-    _store_job(job_id, {"status": "queued", "created_at": time.time()})
+    job_id = job_manager.create_job()
 
-    async def runner():
-        _store_job(job_id, {"status": "running", "created_at": time.time()})
-        try:
-            resp: ChatResponse = await _analyze_code_to_response(code)
-            _store_job(
-                job_id,
-                {
-                    "status": "done",
-                    "result": resp.model_dump(),
-                    "created_at": time.time(),
-                },
-            )
-        except Exception as e:  # pragma: no cover (best-effort logging)
-            logger.exception("Job failed: %s", e)
-            _store_job(
-                job_id, {"status": "error", "error": str(e), "created_at": time.time()}
-            )
+    async def job_coro():
+        return await _analyze_code_to_response(code)
 
-    # fire-and-forget task
     import asyncio
-
-    asyncio.create_task(runner())
+    asyncio.create_task(job_manager.run_job(job_id, job_coro))
 
     return {"job_id": job_id}
 
