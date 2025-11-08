@@ -10,22 +10,63 @@ Tests cover:
 
 import pytest
 import time
-from fastapi.testclient import TestClient
-from main import app, _jobs, _jobs_lock, _rate_buckets, _rate_lock
+
+# Compatible TestClient wrapper: try Starlette's, fallback to httpx+ASGITransport for newer httpx
+import asyncio
+import httpx
+
+class TestClient:
+    """Sync wrapper around httpx.AsyncClient+ASGITransport for compatibility."""
+    def __init__(self, app, base_url: str = "http://testserver") -> None:
+        self.app = app
+        self.base_url = base_url
+
+    def request(self, method: str, url: str, **kwargs):
+        async def _do():
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=self.app), base_url=self.base_url
+            ) as ac:
+                return await ac.request(method, url, **kwargs)
+
+        return asyncio.run(_do())
+
+    def get(self, url: str, **kwargs):
+        return self.request("GET", url, **kwargs)
+
+    def post(self, url: str, **kwargs):
+        return self.request("POST", url, **kwargs)
+
+    def delete(self, url: str, **kwargs):
+        return self.request("DELETE", url, **kwargs)
+
+from main import app, _jobs, _jobs_lock
 
 
 @pytest.fixture(autouse=True)
 def reset_state():
-    """Reset global state before each test to ensure isolation."""
+    """Reset global state before each test and reinstantiate rate limiter with test limits."""
+    from app.core.config import settings as _settings
+    from app.core import di
+    from app.services.rate_limiter import RateLimiter
+
+    # Configure settings for tests
+    _settings.rate_limit_per_minute = 5
+    _settings.max_concurrent_jobs = 3
+
+    # Reinstantiate rate limiter to pick up test settings
+    di.rate_limiter = RateLimiter(_settings.rate_limit_per_minute)
+
     with _jobs_lock:
         _jobs.clear()
-    with _rate_lock:
-        _rate_buckets.clear()
+    with di.rate_limiter._lock:
+        di.rate_limiter._buckets.clear()
+
     yield
+
     with _jobs_lock:
         _jobs.clear()
-    with _rate_lock:
-        _rate_buckets.clear()
+    with di.rate_limiter._lock:
+        di.rate_limiter._buckets.clear()
 
 
 @pytest.fixture
