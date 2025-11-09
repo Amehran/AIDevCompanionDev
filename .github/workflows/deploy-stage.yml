@@ -42,6 +42,9 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     environment: staging
+    env:
+      # Use repo secret if present, otherwise default to us-east-1
+      AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -55,7 +58,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Build Lambda deployment package
         run: |
@@ -67,13 +70,13 @@ jobs:
           aws lambda update-function-code \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
             --zip-file fileb://lambda_bundle.zip \
-            --region ${{ secrets.AWS_REGION }}
+            --region ${{ env.AWS_REGION }}
 
       - name: Wait for update to complete
         run: |
           aws lambda wait function-updated \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
-            --region ${{ secrets.AWS_REGION }}
+            --region ${{ env.AWS_REGION }}
 
       - name: Update environment variables
         run: |
@@ -85,10 +88,10 @@ jobs:
               RATE_LIMIT_PER_MINUTE=${{ secrets.RATE_LIMIT_PER_MINUTE || '10' }},
               MAX_CONCURRENT_JOBS=${{ secrets.MAX_CONCURRENT_JOBS || '100' }}
             }" \
-            --region ${{ secrets.AWS_REGION }}
+            --region ${{ env.AWS_REGION }}
 
       - name: Deployment summary
         run: |
           echo "✅ Deployed to Lambda function: ${{ secrets.LAMBDA_FUNCTION_NAME }}"
           echo "📦 Artifact size: $(du -h lambda_bundle.zip | cut -f1)"
-          echo "🌍 Region: ${{ secrets.AWS_REGION }}"
+          echo "🌍 Region: ${{ env.AWS_REGION }}"
