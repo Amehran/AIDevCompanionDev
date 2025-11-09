@@ -8,6 +8,7 @@ dependencies = [
     "fastapi>=0.121.0",
     "mangum>=0.17.0",
     "uvicorn>=0.27.0",
+    "pydantic-settings>=2.0.0",
     "crewai>=0.11.0",
     "python-dotenv>=1.0.0",
     # CrewAI currently imports ChromaDB APIs that changed in 1.x; pin to a compatible line
