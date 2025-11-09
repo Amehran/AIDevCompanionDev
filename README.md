@@ -159,11 +159,33 @@ bash scripts/package_lambda.sh
 # Output: lambda_bundle.zip (~5 MB)
 ```
 
-### Next (Stage 2)
-- Create a Lambda function (Python 3.11) and upload `lambda_bundle.zip`.
-- Configure a Lambda Function URL or API Gateway HTTP API with proxy integration.
-- Set environment variables (SSM Parameter Store is recommended for secrets).
-- CI/CD: Add a GitHub Actions workflow to package and deploy on pushes to the `stage` branch via OIDC.
+## CI/CD with GitHub Actions (Stage 2)
+
+Automated deployment pipeline for the `stage` branch using GitHub OIDC (no API keys stored in GitHub).
+
+### Workflow Features
+- ✅ Runs tests before deployment
+- ✅ Builds Lambda zip package
+- ✅ Deploys to AWS Lambda via OIDC
+- ✅ Updates environment variables
+- ✅ Validates deployment success
+
+### Setup Instructions
+
+**Complete AWS setup guide:** See [`docs/AWS_SETUP.md`](docs/AWS_SETUP.md) for:
+- IAM role creation with OIDC trust policy
+- Lambda function setup
+- GitHub secrets configuration
+- API Gateway/Function URL setup
+- Troubleshooting guide
+
+**Quick start:**
+1. Create IAM role with GitHub OIDC trust policy
+2. Create Lambda function (Python 3.11)
+3. Add GitHub secrets: `AWS_ROLE_ARN`, `AWS_REGION`, `LAMBDA_FUNCTION_NAME`, `OPENAI_API_KEY`
+4. Push to `stage` branch → deployment triggers automatically
+
+**Workflow file:** `.github/workflows/deploy-stage.yml`
 
 ---
 
