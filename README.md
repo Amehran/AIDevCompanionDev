@@ -145,6 +145,28 @@ When `OPENAI_API_KEY` is set to `"dummy"`, `"test"`, or `"placeholder"`, the bac
 
 ---
 
+## AWS Lambda (Stage 1)
+
+This repo is ready to run on AWS Lambda behind an HTTP API using Mangum.
+
+- Lambda entrypoint: `lambda_handler.py` exposes `handler = Mangum(app)`.
+- Minimal runtime deps: `requirements-aws.txt` includes only FastAPI + Mangum (transitives resolved automatically). Heavy, optional packages like CrewAI/ChromaDB are intentionally excluded; the app uses test-safe stubs when those imports are unavailable.
+- Packaging script: `scripts/package_lambda.sh` builds a slim zip with site-packages + app code.
+
+### Build the artifact locally
+```bash
+bash scripts/package_lambda.sh
+# Output: lambda_bundle.zip (~5 MB)
+```
+
+### Next (Stage 2)
+- Create a Lambda function (Python 3.11) and upload `lambda_bundle.zip`.
+- Configure a Lambda Function URL or API Gateway HTTP API with proxy integration.
+- Set environment variables (SSM Parameter Store is recommended for secrets).
+- CI/CD: Add a GitHub Actions workflow to package and deploy on pushes to the `stage` branch via OIDC.
+
+---
+
 ## Error Handling
 
 All errors return structured JSON with backward-compatible `detail` field:
