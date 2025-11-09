@@ -14,6 +14,10 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    env:
+      # Provide required settings for tests without real secrets
+      OPENAI_API_KEY: dummy
+      MODEL: gpt-4o-mini
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
