@@ -54,38 +54,23 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Pre-check context
+      - name: Validate required secrets
         env:
-          ROLE_ARN_SECRET: ${{ secrets.AWS_ROLE_ARN }}
-          ROLE_ARN_VAR: ${{ vars.AWS_ROLE_ARN }}
-          LAMBDA_NAME_SECRET: ${{ secrets.LAMBDA_FUNCTION_NAME }}
-          LAMBDA_NAME_VAR: ${{ vars.LAMBDA_FUNCTION_NAME }}
+          ROLE_ARN: ${{ secrets.AWS_ROLE_ARN || vars.AWS_ROLE_ARN }}
+          LAMBDA_NAME: ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }}
           OPENAI_SECRET: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          echo "GITHUB_REF=$GITHUB_REF"
-          echo "Derived branch=${GITHUB_REF#refs/heads/}"
-          echo "GITHUB_REPOSITORY=$GITHUB_REPOSITORY"
-          echo "GITHUB_REPOSITORY_OWNER=$GITHUB_REPOSITORY_OWNER"
-          echo "AWS_REGION=${AWS_REGION}"
-          echo "ROLE_ARN (secret) length=${#ROLE_ARN_SECRET}"
-          echo "ROLE_ARN (var) length=${#ROLE_ARN_VAR}"
-          ROLE_ARN="${ROLE_ARN_SECRET:-$ROLE_ARN_VAR}"
-          echo "ROLE_ARN (effective) length=${#ROLE_ARN}"
-          echo "Expected sub should match: repo:${GITHUB_REPOSITORY}:ref:${GITHUB_REF}"
-          echo "LAMBDA_NAME (secret) length=${#LAMBDA_NAME_SECRET}"
-          echo "LAMBDA_NAME (var) length=${#LAMBDA_NAME_VAR}"
           if [ -z "$ROLE_ARN" ]; then
             echo "❌ Missing AWS role ARN. Set repository Secret 'AWS_ROLE_ARN' (preferred) or repository Variable 'AWS_ROLE_ARN'." >&2
             exit 1
           fi
-          if [ -z "$LAMBDA_NAME_SECRET" ] && [ -z "$LAMBDA_NAME_VAR" ]; then
+          if [ -z "$LAMBDA_NAME" ]; then
             echo "❌ Missing Lambda function name. Set Secret or Variable 'LAMBDA_FUNCTION_NAME'." >&2
             exit 1
           fi
           if [ -z "$OPENAI_SECRET" ]; then
             echo "⚠️ OPENAI_API_KEY secret is not set; deployment will succeed but runtime will fail. Add repository Secret 'OPENAI_API_KEY'." >&2
           fi
-          echo "If branch is not 'stage' and your trust policy only allows 'stage', OIDC will fail."
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -96,11 +81,8 @@ jobs:
       - name: Verify assumed role identity
         id: whoami
         run: |
-          echo "🔍 Checking assumed AWS identity"
           ARN=$(aws sts get-caller-identity --query 'Arn' --output text)
-          echo "Assumed ARN: $ARN"
           echo "assumed_role_arn=$ARN" >> $GITHUB_OUTPUT
-          echo "If the above ARN shows role/GitHubActionsLambdaDeploy, OIDC assumption succeeded."
 
       - name: Build Lambda deployment package
         run: |
