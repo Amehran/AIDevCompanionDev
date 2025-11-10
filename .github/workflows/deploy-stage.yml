@@ -61,9 +61,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify assumed role identity
+        id: whoami
         run: |
           echo "🔍 Checking assumed AWS identity"
-          aws sts get-caller-identity
+          ARN=$(aws sts get-caller-identity --query 'Arn' --output text)
+          echo "Assumed ARN: $ARN"
+          echo "assumed_role_arn=$ARN" >> $GITHUB_OUTPUT
           echo "If the above ARN shows role/GitHubActionsLambdaDeploy, OIDC assumption succeeded."
 
       - name: Build Lambda deployment package
@@ -101,3 +104,4 @@ jobs:
           echo "✅ Deployed to Lambda function: ${{ secrets.LAMBDA_FUNCTION_NAME }}"
           echo "📦 Artifact size: $(du -h lambda_bundle.zip | cut -f1)"
           echo "🌍 Region: ${{ env.AWS_REGION }}"
+          echo "👤 Assumed role: ${{ steps.whoami.outputs.assumed_role_arn }}"
