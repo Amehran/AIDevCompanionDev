@@ -120,6 +120,20 @@ jobs:
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }} \
             --region ${{ env.AWS_REGION }}
 
+      - name: Update runtime configuration
+        run: |
+          aws lambda update-function-configuration \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }} \
+            --handler lambda_handler.handler \
+            --runtime python3.11 \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Wait for runtime config update
+        run: |
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }} \
+            --region ${{ env.AWS_REGION }}
+
       - name: Update environment variables
         run: |
           aws lambda update-function-configuration \
