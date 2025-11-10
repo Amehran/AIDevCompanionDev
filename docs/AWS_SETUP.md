@@ -1,8 +1,8 @@
 # AWS Setup for GitHub Actions OIDC Deployment
 
-## IAM Role Trust Policy
+## IAM Role Trust Policy (GitHub Actions Deploy Role)
 
-Create an IAM role in AWS with this trust policy to allow GitHub Actions to assume the role via OIDC:
+Create (or update) the IAM role used by GitHub Actions with this *narrow* trust policy. It restricts assumptions to the `stage` branch only, enforcing branch-based deployment control:
 
 ```json
 {
@@ -29,9 +29,9 @@ Create an IAM role in AWS with this trust policy to allow GitHub Actions to assu
 
 **Replace `YOUR_AWS_ACCOUNT_ID`** with your actual AWS account ID.
 
-## IAM Role Permissions Policy
+## IAM Role Permissions Policy (Least Privilege)
 
-Attach this inline policy to the role to grant deployment permissions:
+Attach this inline policy to the GitHub Actions deploy role. It grants only what the workflow requires (update code/config + read back). Remove broader managed policies like `AWSLambda_FullAccess` if previously attached:
 
 ```json
 {
@@ -43,7 +43,7 @@ Attach this inline policy to the role to grant deployment permissions:
         "lambda:UpdateFunctionCode",
         "lambda:UpdateFunctionConfiguration",
         "lambda:GetFunction",
-        "lambda:GetFunctionConfiguration"
+  "lambda:GetFunctionConfiguration"
       ],
       "Resource": "arn:aws:lambda:YOUR_REGION:YOUR_AWS_ACCOUNT_ID:function/YOUR_LAMBDA_FUNCTION_NAME"
     }
@@ -51,10 +51,34 @@ Attach this inline policy to the role to grant deployment permissions:
 }
 ```
 
-**Replace:**
-- `YOUR_REGION` with your AWS region (e.g., `us-east-1`)
-- `YOUR_AWS_ACCOUNT_ID` with your AWS account ID
-- `YOUR_LAMBDA_FUNCTION_NAME` with your Lambda function name
+**Replace placeholders:**
+- `YOUR_REGION` → e.g. `us-east-1`
+- `YOUR_AWS_ACCOUNT_ID` → your 12-digit account ID
+- `YOUR_LAMBDA_FUNCTION_NAME` → e.g. `ai-dev-companion-stage`
+
+### Optional: Add Read-Only Log Access (Not usually needed in deploy role)
+If your workflow ever needs to inspect recent logs (rare), you can extend with:
+```jsonc
+// Additional statement (optional)
+{
+  "Effect": "Allow",
+  "Action": [
+    "logs:GetLogEvents",
+    "logs:DescribeLogStreams"
+  ],
+  "Resource": "arn:aws:logs:YOUR_REGION:YOUR_AWS_ACCOUNT_ID:log-group:/aws/lambda/YOUR_LAMBDA_FUNCTION_NAME:*"
+}
+```
+
+Keep this out unless required, to avoid unnecessary expansion of the role's surface area.
+
+## Lambda Execution Role (Runtime) vs Deploy Role
+
+You now have two distinct roles:
+- **Execution Role** (e.g. `service-role/ai-dev-companion-stage-role-ui8vqf0e`): assumed by Lambda service when your function runs. Must include managed policy `AWSLambdaBasicExecutionRole` for CloudWatch logging.
+- **Deploy Role** (e.g. `GitHubActionsLambdaDeploy`): assumed by GitHub Actions via OIDC. Only needs the limited Lambda update/read permissions above.
+
+Never reuse the execution role as the deploy role—separating them reduces blast radius.
 
 ## OIDC Provider Setup (One-time)
 
@@ -66,14 +90,14 @@ If you haven't already set up the GitHub OIDC provider in AWS:
 4. Audience: `sts.amazonaws.com`
 5. Click **Add provider**
 
-## GitHub Secrets Configuration
+## GitHub Secrets Configuration (Deployment Inputs)
 
 Add these secrets in your GitHub repository settings (**Settings → Secrets and variables → Actions → New repository secret**):
 
 | Secret Name | Value | Example |
 |-------------|-------|---------|
 | `AWS_ROLE_ARN` | ARN of the IAM role created above | `arn:aws:iam::123456789012:role/GitHubActionsLambdaDeploy` |
-| `AWS_REGION` | AWS region where Lambda is deployed | `us-east-1` |
+| `AWS_REGION` | AWS region where Lambda is deployed (can default to `us-east-1` in workflow) | `us-east-1` |
 | `LAMBDA_FUNCTION_NAME` | Name of your Lambda function | `ai-dev-companion-stage` |
 | `OPENAI_API_KEY` | Your OpenAI API key | `sk-...` |
 | `MODEL` | (Optional) LLM model name | `gpt-4o-mini` |
@@ -163,7 +187,7 @@ Expected response:
 
 **Total estimated cost for low-traffic demo: $0 - $5/month**
 
-## Troubleshooting
+## Troubleshooting & Hardening
 
 ### Workflow fails with "AssumeRoleWithWebIdentity failed"
 - Verify OIDC provider is set up correctly
@@ -180,7 +204,7 @@ Expected response:
 - Check that `scripts/package_lambda.sh` ran successfully
 - Verify zip includes both code and dependencies
 
-## Next Steps
+## Next Steps & Hardening Checklist
 
 1. ✅ Create IAM role with trust policy above
 2. ✅ Set up OIDC provider (if not already done)
@@ -188,5 +212,60 @@ Expected response:
 4. ✅ Add GitHub secrets
 5. ✅ Push to `stage` branch to trigger first deployment
 6. ✅ Test the deployed endpoint
-7. Optional: Set up custom domain with Route 53 + API Gateway
-8. Optional: Add CloudWatch alarms for errors/latency
+7. Narrow trust policy to only required branches (already set to `stage`)
+8. Confirm deploy role policy is least-privilege (remove legacy broad policies)
+9. Add CloudWatch alarms (e.g., Errors > 0, Duration p95) for production readiness
+10. (Optional) Enable concurrency controls or reserved concurrency on Lambda
+11. (Optional) Use Parameter Store or Secrets Manager for sensitive config instead of plain env vars
+
+---
+### Example Final Deploy Role Policies (Complete Bundle)
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration"
+      ],
+      "Resource": "arn:aws:lambda:us-east-1:YOUR_AWS_ACCOUNT_ID:function:ai-dev-companion-stage"
+    }
+  ]
+}
+```
+
+### Example Final Trust Policy (Stage Branch Only)
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::YOUR_AWS_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": "repo:Amehran/AIDevCompanionDev:ref:refs/heads/stage"
+        }
+      }
+    }
+  ]
+}
+```
+
+---
+**Security Recap:**
+- Separate execution vs deployment roles ✔️
+- Narrow OIDC trust to one branch ✔️
+- Least privilege Lambda actions ✔️
+- Logging via `AWSLambdaBasicExecutionRole` ✔️
+- Pending (optional): alarms, secret rotation, stricter branch protections.

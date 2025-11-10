@@ -72,6 +72,13 @@ jobs:
             echo "⚠️ OPENAI_API_KEY secret is not set; deployment will succeed but runtime will fail. Add repository Secret 'OPENAI_API_KEY'." >&2
           fi
 
+      - name: Debug OIDC context
+        run: |
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "GITHUB_REPOSITORY=$GITHUB_REPOSITORY"
+          echo "Expected OIDC sub claim: repo:${GITHUB_REPOSITORY}:ref:${GITHUB_REF}"
+          echo "Trust policy should match exactly the above sub claim"
+
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
