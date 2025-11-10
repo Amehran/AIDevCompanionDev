@@ -1,10 +1,10 @@
 from fastapi import FastAPI, HTTPException, Query, Request, Depends
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
-from dotenv import load_dotenv
 from typing import Any, Dict, Optional
 import sys
 import logging
+import os
 
 from src.crew import CodeReviewProject  # type: ignore
 from app.core.config import Settings, get_settings, settings
@@ -35,7 +35,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-load_dotenv()
+# Load .env only in local dev (Lambda gets env vars from function config)
+if os.getenv("AWS_EXECUTION_ENV") is None:
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass  # python-dotenv not installed; fine in Lambda
 
 app = FastAPI()
 # Initialize services (use DI singletons)
