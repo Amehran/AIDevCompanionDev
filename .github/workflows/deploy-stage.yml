@@ -54,6 +54,16 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Pre-check context
+        env:
+          ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+        run: |
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "Derived branch=${GITHUB_REF#refs/heads/}"
+          echo "AWS_REGION=${AWS_REGION}"
+          echo "ROLE_ARN length=${#ROLE_ARN}"
+          echo "If branch is not 'stage' and your trust policy only allows 'stage', OIDC will fail."
+
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
