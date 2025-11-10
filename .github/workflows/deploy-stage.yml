@@ -56,18 +56,41 @@ jobs:
 
       - name: Pre-check context
         env:
-          ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+          ROLE_ARN_SECRET: ${{ secrets.AWS_ROLE_ARN }}
+          ROLE_ARN_VAR: ${{ vars.AWS_ROLE_ARN }}
+          LAMBDA_NAME_SECRET: ${{ secrets.LAMBDA_FUNCTION_NAME }}
+          LAMBDA_NAME_VAR: ${{ vars.LAMBDA_FUNCTION_NAME }}
+          OPENAI_SECRET: ${{ secrets.OPENAI_API_KEY }}
         run: |
           echo "GITHUB_REF=$GITHUB_REF"
           echo "Derived branch=${GITHUB_REF#refs/heads/}"
+          echo "GITHUB_REPOSITORY=$GITHUB_REPOSITORY"
+          echo "GITHUB_REPOSITORY_OWNER=$GITHUB_REPOSITORY_OWNER"
           echo "AWS_REGION=${AWS_REGION}"
-          echo "ROLE_ARN length=${#ROLE_ARN}"
+          echo "ROLE_ARN (secret) length=${#ROLE_ARN_SECRET}"
+          echo "ROLE_ARN (var) length=${#ROLE_ARN_VAR}"
+          ROLE_ARN="${ROLE_ARN_SECRET:-$ROLE_ARN_VAR}"
+          echo "ROLE_ARN (effective) length=${#ROLE_ARN}"
+          echo "Expected sub should match: repo:${GITHUB_REPOSITORY}:ref:${GITHUB_REF}"
+          echo "LAMBDA_NAME (secret) length=${#LAMBDA_NAME_SECRET}"
+          echo "LAMBDA_NAME (var) length=${#LAMBDA_NAME_VAR}"
+          if [ -z "$ROLE_ARN" ]; then
+            echo "❌ Missing AWS role ARN. Set repository Secret 'AWS_ROLE_ARN' (preferred) or repository Variable 'AWS_ROLE_ARN'." >&2
+            exit 1
+          fi
+          if [ -z "$LAMBDA_NAME_SECRET" ] && [ -z "$LAMBDA_NAME_VAR" ]; then
+            echo "❌ Missing Lambda function name. Set Secret or Variable 'LAMBDA_FUNCTION_NAME'." >&2
+            exit 1
+          fi
+          if [ -z "$OPENAI_SECRET" ]; then
+            echo "⚠️ OPENAI_API_KEY secret is not set; deployment will succeed but runtime will fail. Add repository Secret 'OPENAI_API_KEY'." >&2
+          fi
           echo "If branch is not 'stage' and your trust policy only allows 'stage', OIDC will fail."
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN || vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify assumed role identity
@@ -87,31 +110,31 @@ jobs:
       - name: Deploy to Lambda
         run: |
           aws lambda update-function-code \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }} \
             --zip-file fileb://lambda_bundle.zip \
             --region ${{ env.AWS_REGION }}
 
       - name: Wait for update to complete
         run: |
           aws lambda wait function-updated \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }} \
             --region ${{ env.AWS_REGION }}
 
       - name: Update environment variables
         run: |
           aws lambda update-function-configuration \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }} \
             --environment "Variables={
               OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},
-              MODEL=${{ secrets.MODEL || 'gpt-4o-mini' }},
-              RATE_LIMIT_PER_MINUTE=${{ secrets.RATE_LIMIT_PER_MINUTE || '10' }},
-              MAX_CONCURRENT_JOBS=${{ secrets.MAX_CONCURRENT_JOBS || '100' }}
+              MODEL=${{ secrets.MODEL || vars.MODEL || 'gpt-4o-mini' }},
+              RATE_LIMIT_PER_MINUTE=${{ secrets.RATE_LIMIT_PER_MINUTE || vars.RATE_LIMIT_PER_MINUTE || '10' }},
+              MAX_CONCURRENT_JOBS=${{ secrets.MAX_CONCURRENT_JOBS || vars.MAX_CONCURRENT_JOBS || '100' }}
             }" \
             --region ${{ env.AWS_REGION }}
 
       - name: Deployment summary
         run: |
-          echo "✅ Deployed to Lambda function: ${{ secrets.LAMBDA_FUNCTION_NAME }}"
+          echo "✅ Deployed to Lambda function: ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }}"
           echo "📦 Artifact size: $(du -h lambda_bundle.zip | cut -f1)"
           echo "🌍 Region: ${{ env.AWS_REGION }}"
           echo "👤 Assumed role: ${{ steps.whoami.outputs.assumed_role_arn }}"
