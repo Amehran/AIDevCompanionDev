@@ -2,3 +2,4 @@
 # Keep this list lean; transitive deps will be resolved automatically
 fastapi==0.121.0
 mangum>=0.17.0,<0.18.0
+pydantic-settings>=2.0.0
