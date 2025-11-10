@@ -60,6 +60,12 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Verify assumed role identity
+        run: |
+          echo "🔍 Checking assumed AWS identity"
+          aws sts get-caller-identity
+          echo "If the above ARN shows role/GitHubActionsLambdaDeploy, OIDC assumption succeeded."
+
       - name: Build Lambda deployment package
         run: |
           bash scripts/package_lambda.sh
