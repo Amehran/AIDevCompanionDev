@@ -72,33 +72,7 @@ jobs:
             echo "⚠️ OPENAI_API_KEY secret is not set; deployment will succeed but runtime will fail. Add repository Secret 'OPENAI_API_KEY'." >&2
           fi
 
-      - name: Debug OIDC context
-        run: |
-          echo "GITHUB_REF=$GITHUB_REF"
-          echo "GITHUB_REPOSITORY=$GITHUB_REPOSITORY"
-          echo "Expected OIDC sub claim: repo:${GITHUB_REPOSITORY}:ref:${GITHUB_REF}"
-          echo "Trust policy should match exactly the above sub claim"
-
-      - name: Debug actual OIDC sub claim
-        shell: bash
-        run: |
-          echo "Fetching GitHub OIDC token (audience=sts.amazonaws.com)"
-          TOKEN_JSON=$(curl -sLS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com")
-          TOKEN=$(echo "$TOKEN_JSON" | jq -r '.value')
-          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
-            echo "Failed to obtain OIDC token from GitHub." >&2
-            echo "$TOKEN_JSON" | head -c 500 >&2
-            exit 1
-          fi
-          SUB=$(echo "$TOKEN" | cut -d '.' -f2 | base64 -d 2>/dev/null | jq -r '.sub')
-          echo "Actual OIDC sub claim: $SUB"
-
-      - name: Debug role-to-assume fingerprint
-        env:
-          ROLE_ARN: ${{ secrets.AWS_ROLE_ARN || vars.AWS_ROLE_ARN }}
-        run: |
-          echo "Role ARN length=${#ROLE_ARN}"
-          echo "Role ARN ends with: ${ROLE_ARN: -12}"
+      # Debug steps removed after validation; keeping workflow minimal and secure
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
