@@ -1,26 +1,39 @@
+"""Lightweight crew stub.
+
+This module intentionally avoids importing heavy dependencies (crewai, vector DBs) so
+Lambda packaging and test environments remain lean. When the real library is not
+available, deterministic JSON is returned so upstream handlers can still function.
+
+In the future we can re-enable full CrewAI behavior via a Lambda layer or container
+image without changing calling code.
+"""
+
+from __future__ import annotations
 import os
+from typing import Any, Dict
 
-# Attempt to import crewai; fall back to lightweight stubs if unavailable (e.g. test environment)
-try:
-    from crewai import Agent, Task, Crew  # type: ignore
-    CREW_AVAILABLE = True
-except Exception:  # pragma: no cover - fallback path
-    CREW_AVAILABLE = False
+CREW_AVAILABLE = False  # Hard disable to prevent accidental heavy imports
 
-    class Agent:  # type: ignore
-        def __init__(self, *args, **kwargs):
-            pass
+class Agent:  # type: ignore
+    def __init__(self, *args, **kwargs):
+        pass
 
-    class Task:  # type: ignore
-        def __init__(self, *args, **kwargs):
-            pass
+class Task:  # type: ignore
+    def __init__(self, *args, **kwargs):
+        pass
 
-    class Crew:  # type: ignore
-        def __init__(self, *args, **kwargs):
-            pass
+class Crew:  # type: ignore
+    def __init__(self, *args, **kwargs):
+        pass
 
-        def kickoff(self, inputs):  # Return deterministic JSON string
-            return '{"summary": "OK (stub)", "issues": []}'
+    def kickoff(self, inputs: Dict[str, Any]):  # Return deterministic JSON string
+        # Echo minimal context to help debugging (truncate code for size)
+        code = inputs.get("source_code", "")
+        preview = code[:60].replace("\n", " ")
+        return (
+            '{"summary": "Stub analysis OK", "issues": [], '
+            f'"meta": {{"preview": "{preview}", "mode": "stub"}}}}'
+        )
 
 
 class CodeReviewProject:
@@ -121,14 +134,6 @@ class CodeReviewProject:
         )
 
     def code_review_crew(self) -> Crew:
-        if not CREW_AVAILABLE:
-            # Return stub Crew with deterministic kickoff
-            return Crew()
-        review = self.code_review_task()
-        format_json = self.json_formatter_task(review)
-        return Crew(
-            name="CodeReviewCrew",
-            agents=[self.code_reviewer_agent(), self.json_formatter_agent()],
-            tasks=[review, format_json],
-        )
+        # Always return stub Crew in current deployment mode.
+        return Crew()
     
