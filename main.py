@@ -13,7 +13,6 @@ from app.api.health import router as health_router
 from app.api.diag import router as diag_router
 from app.api.chat import router as chat_router
 from app.api.jobs import router as jobs_router
-from app.api.chat_llm import router as chat_llm_router
 from app.core.error_handlers import register_exception_handlers
 # Structured exceptions available for future use
 # Placeholder: structured exceptions available for future integration
@@ -80,7 +79,6 @@ register_exception_handlers(app)
 app.include_router(health_router)
 app.include_router(chat_router)
 app.include_router(jobs_router)
-app.include_router(chat_llm_router)
 app.include_router(diag_router)
 
 
