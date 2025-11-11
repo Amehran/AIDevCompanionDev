@@ -7,6 +7,7 @@ from typing import Dict, Any
 from app.core.di import get_settings, get_rate_limiter, get_job_manager
 from app.domain.models import ChatRequest, ChatResponse
 from app.core.di import settings
+from app.utils.parsing import parse_llm_json
 from src.crew import CodeReviewProject  # type: ignore
 from starlette.concurrency import run_in_threadpool
 
@@ -18,25 +19,7 @@ async def _analyze_code(code: str) -> ChatResponse:
     project = CodeReviewProject()
     crew = project.code_review_crew()
     raw_result = await run_in_threadpool(lambda: crew.kickoff(inputs={"source_code": code}))
-    import json
-    try:
-        parsed = json.loads(str(raw_result))
-    except Exception:
-        return ChatResponse(summary=str(raw_result), issues=[])
-    summary = parsed.get("summary") if isinstance(parsed, dict) else None
-    issues = []
-    if isinstance(parsed, dict) and isinstance(parsed.get("issues"), list):
-        from app.domain.models import Issue
-        for item in parsed["issues"]:
-            if isinstance(item, dict):
-                issues.append(
-                    Issue(
-                        type=item.get("type"),
-                        description=item.get("description"),
-                        suggestion=item.get("suggestion"),
-                    )
-                )
-    return ChatResponse(summary=summary, issues=issues)
+    return parse_llm_json(str(raw_result))
 
 @router.post("/chat/submit")
 async def submit_chat(

@@ -10,9 +10,9 @@ Examples:
 
 from fastapi import APIRouter, Query
 from app.core.exceptions import InvalidInput
-from app.domain.models import ChatRequest, ChatResponse, Issue
+from app.domain.models import ChatRequest, ChatResponse
 from app.core.config import settings
-import json
+from app.utils.parsing import parse_llm_json
 import traceback
 
 router = APIRouter()
@@ -28,27 +28,6 @@ _DEF_MODEL = "gpt-4o-mini"
 
 def _model_name() -> str:
     return settings.effective_model if getattr(settings, "effective_model", None) else _DEF_MODEL
-
-
-def _parse_llm_json(text: str) -> ChatResponse:
-    try:
-        data = json.loads(text)
-        summary = data.get("summary") if isinstance(data, dict) else None
-        raw_issues = data.get("issues") if isinstance(data, dict) else []
-        issues: list[Issue] = []
-        if isinstance(raw_issues, list):
-            for item in raw_issues:
-                if isinstance(item, dict):
-                    issues.append(
-                        Issue(
-                            type=item.get("type"),
-                            description=item.get("description"),
-                            suggestion=item.get("suggestion"),
-                        )
-                    )
-        return ChatResponse(summary=summary or text, issues=issues)
-    except json.JSONDecodeError:
-        return ChatResponse(summary=text, issues=[])
 
 
 @router.post("/chat")
@@ -83,7 +62,7 @@ async def chat(
             temperature=0.2,
         )
         content = response.choices[0].message.content
-        return _parse_llm_json(content)
+        return parse_llm_json(content)
     except ImportError as e:
         return ChatResponse(summary=f"openai_import_error: {e}", issues=[])
     except Exception as e:

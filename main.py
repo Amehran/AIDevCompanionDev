@@ -4,17 +4,12 @@ import sys
 import logging
 import os
 
-# from app.core.config import settings  # (Removed unused direct import; settings accessed via DI if needed)
 from app.core.di import rate_limiter, job_manager
 from app.api.health import router as health_router
 from app.api.diag import router as diag_router
 from app.api.chat import router as chat_router
 from app.api.jobs import router as jobs_router
 from app.core.error_handlers import register_exception_handlers
-# Structured exceptions available for future use
-# Placeholder: structured exceptions available for future integration
-# (Removed unused imports to satisfy lint.)
-# (Domain models imported elsewhere; not needed directly in main now.)
 
 # Force unbuffered output
 sys.stdout = sys.__stdout__
