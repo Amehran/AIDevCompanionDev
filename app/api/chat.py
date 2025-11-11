@@ -24,6 +24,42 @@ async def chat(
     if (settings.openai_api_key or "").lower() in {"dummy", "test", "placeholder"}:
         return ChatResponse(summary="OK (test mode)", issues=[])
 
+    # Lightweight OpenAI-based review (without CrewAI) for Lambda deployment
+    # TODO: Implement Lambda Layer or Container Image for full CrewAI support
+    try:
+        import openai
+        client = openai.OpenAI(api_key=settings.openai_api_key)
+        
+        response = client.chat.completions.create(
+            model=settings.model or "gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a code review assistant. Analyze the code and return a JSON with 'summary' (string) and 'issues' (array of objects with 'type', 'description', 'suggestion')."},
+                {"role": "user", "content": f"Review this code:\n\n{code}"}
+            ],
+            temperature=0.3
+        )
+        
+        result_text = response.choices[0].message.content
+        import json
+        try:
+            parsed = json.loads(result_text)
+            summary = parsed.get("summary", result_text)
+            issues_data = parsed.get("issues", [])
+            issues = [
+                Issue(
+                    type=item.get("type"),
+                    description=item.get("description"),
+                    suggestion=item.get("suggestion")
+                )
+                for item in issues_data if isinstance(item, dict)
+            ]
+            return ChatResponse(summary=summary, issues=issues)
+        except json.JSONDecodeError:
+            return ChatResponse(summary=result_text, issues=[])
+    except Exception as e:
+        return ChatResponse(summary=f"Error during code review: {str(e)}", issues=[])
+
+    # Fallback to CrewAI if available (for local dev or container deployment)
     project = CodeReviewProject()
     crew = project.code_review_crew()
     raw_result = await run_in_threadpool(lambda: crew.kickoff(inputs={"source_code": code}))
