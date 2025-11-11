@@ -56,30 +56,36 @@ async def chat(
             return ChatResponse(summary=summary, issues=issues)
         except json.JSONDecodeError:
             return ChatResponse(summary=result_text, issues=[])
+    except ImportError:
+        # OpenAI not available, try CrewAI fallback
+        pass
     except Exception as e:
         return ChatResponse(summary=f"Error during code review: {str(e)}", issues=[])
 
-    # Fallback to CrewAI if available (for local dev or container deployment)
-    project = CodeReviewProject()
-    crew = project.code_review_crew()
-    raw_result = await run_in_threadpool(lambda: crew.kickoff(inputs={"source_code": code}))
-
-    import json
+    # Fallback to CrewAI if OpenAI import failed (for local dev or container deployment)
     try:
-        parsed = json.loads(str(raw_result))
-    except Exception:
-        return ChatResponse(summary=str(raw_result), issues=[])
+        project = CodeReviewProject()
+        crew = project.code_review_crew()
+        raw_result = await run_in_threadpool(lambda: crew.kickoff(inputs={"source_code": code}))
 
-    summary = parsed.get("summary") if isinstance(parsed, dict) else None
-    issues = []
-    if isinstance(parsed, dict) and isinstance(parsed.get("issues"), list):
-        for item in parsed["issues"]:
-            if isinstance(item, dict):
-                issues.append(
-                    Issue(
-                        type=item.get("type"),
-                        description=item.get("description"),
-                        suggestion=item.get("suggestion"),
+        import json
+        try:
+            parsed = json.loads(str(raw_result))
+        except Exception:
+            return ChatResponse(summary=str(raw_result), issues=[])
+
+        summary = parsed.get("summary") if isinstance(parsed, dict) else None
+        issues = []
+        if isinstance(parsed, dict) and isinstance(parsed.get("issues"), list):
+            for item in parsed["issues"]:
+                if isinstance(item, dict):
+                    issues.append(
+                        Issue(
+                            type=item.get("type"),
+                            description=item.get("description"),
+                            suggestion=item.get("suggestion"),
+                        )
                     )
-                )
-    return ChatResponse(summary=summary, issues=issues)
+        return ChatResponse(summary=summary, issues=issues)
+    except Exception as e:
+        return ChatResponse(summary=f"CrewAI fallback error: {str(e)}", issues=[])
