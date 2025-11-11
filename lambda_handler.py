@@ -1,4 +1,5 @@
 from mangum import Mangum
+import os
 
 # Import the FastAPI app instance
 from main import app
@@ -16,6 +17,10 @@ def handler(event, context):  # pragma: no cover - AWS entrypoint
 	checks or manual tests.
 	"""
 	try:
+		# Log commit SHA if available for deployment verification
+		commit = os.getenv("APP_COMMIT_SHA")
+		if commit:
+			print(f"[lambda] APP_COMMIT_SHA={commit}")
 		rc = event.get("requestContext") or {}
 		http_ctx = rc.get("http") or {}
 		if "sourceIp" not in http_ctx:

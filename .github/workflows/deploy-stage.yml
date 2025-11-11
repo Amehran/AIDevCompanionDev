@@ -126,7 +126,8 @@ jobs:
               OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},
               MODEL=${{ secrets.MODEL || vars.MODEL || 'gpt-4o-mini' }},
               RATE_LIMIT_PER_MINUTE=${{ secrets.RATE_LIMIT_PER_MINUTE || vars.RATE_LIMIT_PER_MINUTE || '10' }},
-              MAX_CONCURRENT_JOBS=${{ secrets.MAX_CONCURRENT_JOBS || vars.MAX_CONCURRENT_JOBS || '100' }}
+              MAX_CONCURRENT_JOBS=${{ secrets.MAX_CONCURRENT_JOBS || vars.MAX_CONCURRENT_JOBS || '100' }},
+              APP_COMMIT_SHA=${{ github.sha }}
             }" \
             --region ${{ env.AWS_REGION }}
 
