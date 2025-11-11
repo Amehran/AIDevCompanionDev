@@ -1,15 +1,14 @@
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from typing import Any, Dict
 import sys
 import logging
 import os
 
-from app.core.di import rate_limiter, job_manager
 from app.api.health import router as health_router
 from app.api.diag import router as diag_router
 from app.api.chat import router as chat_router
-from app.api.jobs import router as jobs_router
-from app.core.error_handlers import register_exception_handlers
+from app.core.exceptions import InvalidInput
 
 # Force unbuffered output
 sys.stdout = sys.__stdout__
@@ -33,13 +32,12 @@ if os.getenv("AWS_EXECUTION_ENV") is None:
         pass  # python-dotenv not installed; fine in Lambda
 
 app = FastAPI()
-# Initialize services (use DI singletons)
 
-# Expose internal state for tests (back-compat with tests/test_api.py)
-_rate_lock = rate_limiter._lock  # type: ignore[attr-defined]
-_rate_buckets = rate_limiter.buckets
-_jobs_lock = job_manager._lock  # type: ignore[attr-defined]
-_jobs = job_manager.jobs
+
+# Simple exception handler for InvalidInput
+@app.exception_handler(InvalidInput)
+async def invalid_input_handler(request, exc):
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
 # Lightweight logging (avoid consuming body so external POST works)
@@ -61,12 +59,9 @@ async def basic_logging(request, call_next):
         logger.error(traceback.format_exc())
         raise
 
-register_exception_handlers(app)
-
 # Include routers
 app.include_router(health_router)
 app.include_router(chat_router)
-app.include_router(jobs_router)
 app.include_router(diag_router)
 
 
@@ -86,9 +81,3 @@ async def echo(payload: Dict[str, Any]):
     """Debug endpoint: returns payload verbatim to help client integration."""
     return {"received": payload}
 
-
-# Note: The /chat endpoint is provided by app.api.chat router. We intentionally
-# avoid defining a duplicate handler here to prevent routing conflicts.
-
-
-# (Job endpoints including cleanup are provided by app.api.jobs router; duplicates removed.)
