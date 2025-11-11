@@ -23,7 +23,9 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, description="Debug mode")
     
     # ===== OpenAI Configuration =====
-    openai_api_key: str = Field(..., description="OpenAI API key (required)")
+    # Make optional to avoid crashing app startup when env var is missing.
+    # Endpoints that require this key must validate presence at runtime.
+    openai_api_key: Optional[str] = Field(default=None, description="OpenAI API key (optional; required for OpenAI calls)")
     model: str = Field(default="gpt-4o-mini", description="OpenAI model to use")
     model_name: Optional[str] = Field(default=None, description="Alternative model name (legacy)")
 
