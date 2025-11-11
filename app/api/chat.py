@@ -1,9 +1,7 @@
 from fastapi import APIRouter, Query, Depends
 from app.core.exceptions import InvalidInput
-from starlette.concurrency import run_in_threadpool
 from app.core.di import get_settings
 from app.domain.models import ChatRequest, ChatResponse, Issue
-from src.crew import CodeReviewProject  # type: ignore
 
 router = APIRouter()
 
@@ -56,36 +54,12 @@ async def chat(
             return ChatResponse(summary=summary, issues=issues)
         except json.JSONDecodeError:
             return ChatResponse(summary=result_text, issues=[])
-    except ImportError:
-        # OpenAI not available, try CrewAI fallback
-        pass
+    except ImportError as e:
+        # OpenAI not available, return error
+        return ChatResponse(summary=f"OpenAI module not available: {str(e)}", issues=[])
     except Exception as e:
-        return ChatResponse(summary=f"Error during code review: {str(e)}", issues=[])
+        # Return detailed error for debugging
+        import traceback
+        error_detail = f"Error during OpenAI code review: {str(e)}\nType: {type(e).__name__}\nTrace: {traceback.format_exc()}"
+        return ChatResponse(summary=error_detail, issues=[])
 
-    # Fallback to CrewAI if OpenAI import failed (for local dev or container deployment)
-    try:
-        project = CodeReviewProject()
-        crew = project.code_review_crew()
-        raw_result = await run_in_threadpool(lambda: crew.kickoff(inputs={"source_code": code}))
-
-        import json
-        try:
-            parsed = json.loads(str(raw_result))
-        except Exception:
-            return ChatResponse(summary=str(raw_result), issues=[])
-
-        summary = parsed.get("summary") if isinstance(parsed, dict) else None
-        issues = []
-        if isinstance(parsed, dict) and isinstance(parsed.get("issues"), list):
-            for item in parsed["issues"]:
-                if isinstance(item, dict):
-                    issues.append(
-                        Issue(
-                            type=item.get("type"),
-                            description=item.get("description"),
-                            suggestion=item.get("suggestion"),
-                        )
-                    )
-        return ChatResponse(summary=summary, issues=issues)
-    except Exception as e:
-        return ChatResponse(summary=f"CrewAI fallback error: {str(e)}", issues=[])
