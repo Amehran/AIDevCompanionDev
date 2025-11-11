@@ -1,13 +1,10 @@
-from fastapi import FastAPI, HTTPException, Query, Request, Depends
-from fastapi.responses import JSONResponse
-from starlette.concurrency import run_in_threadpool
-from typing import Any, Dict, Optional
+from fastapi import FastAPI
+from typing import Any, Dict
 import sys
 import logging
 import os
 
-from src.crew import CodeReviewProject  # type: ignore
-from app.core.config import Settings, get_settings, settings
+# from app.core.config import settings  # (Removed unused direct import; settings accessed via DI if needed)
 from app.core.di import rate_limiter, job_manager
 from app.api.health import router as health_router
 from app.api.diag import router as diag_router
@@ -17,11 +14,7 @@ from app.core.error_handlers import register_exception_handlers
 # Structured exceptions available for future use
 # Placeholder: structured exceptions available for future integration
 # (Removed unused imports to satisfy lint.)
-from app.domain.models import (
-    ChatRequest,
-    ChatResponse,
-    Issue,
-)
+# (Domain models imported elsewhere; not needed directly in main now.)
 
 # Force unbuffered output
 sys.stdout = sys.__stdout__
@@ -103,144 +96,4 @@ async def echo(payload: Dict[str, Any]):
 # avoid defining a duplicate handler here to prevent routing conflicts.
 
 
-# =========================
-# Async (job-based) variant
-# =========================
-
-JobRecord = Dict[str, Any]
-
-
-def _get_job(job_id: str) -> Optional[JobRecord]:
-    return job_manager.get(job_id)
-
-
-def _cleanup_jobs(ttl_seconds: int = 3600) -> int:
-    return job_manager.cleanup(ttl_seconds)
-
-
-async def _analyze_code_to_response(code: str) -> ChatResponse:
-    logger.info(f"[job] Analyzing code len={len(code)}")
-    # Test-mode shortcut: when using a dummy/test API key, avoid real LLM calls
-    if (settings.openai_api_key or "").lower() in {"dummy", "test", "placeholder"}:
-        return ChatResponse(summary="OK (test mode)", issues=[])
-    project = CodeReviewProject()
-    crew = project.code_review_crew()
-    raw_result = await run_in_threadpool(
-        lambda: crew.kickoff(inputs={"source_code": code})
-    )
-    import json
-
-    try:
-        parsed = json.loads(str(raw_result))
-    except Exception:
-        return ChatResponse(summary=str(raw_result), issues=[])
-
-    summary = parsed.get("summary") if isinstance(parsed, dict) else None
-    issues: list[Issue] = []
-    if isinstance(parsed, dict) and isinstance(parsed.get("issues"), list):
-        for item in parsed["issues"]:
-            if isinstance(item, dict):
-                issues.append(
-                    Issue(
-                        type=item.get("type"),
-                        description=item.get("description"),
-                        suggestion=item.get("suggestion"),
-                    )
-                )
-    return ChatResponse(summary=summary, issues=issues)
-
-
-# =========================
-# Rate limiting helpers
-# =========================
-
-
-def _rate_limit_check(ip: str) -> Optional[int]:
-    """Return retry_after seconds if limited, else None."""
-    return rate_limiter.check(ip)
-
-
-def _active_jobs_count() -> int:
-    return job_manager.active_count()
-
-
-@app.post("/chat/submit")
-async def submit_chat(
-    request: Request, body: ChatRequest, settings: Settings = Depends(get_settings)
-) -> Dict[str, str]:
-    # Per-IP rate limiting (fixed 60s window)
-    ip = request.client.host if request.client else "unknown"
-    retry_after = _rate_limit_check(ip)
-    if retry_after is not None:
-        payload = {
-            "error": {
-                "type": "rate_limit_exceeded",
-                "message": f"Too many requests. Try again in {retry_after} seconds.",
-                "retry_after": retry_after,
-            }
-        }
-        return JSONResponse(
-            status_code=429, headers={"Retry-After": str(retry_after)}, content=payload
-        )
-
-    # Global concurrent jobs guard
-    active = _active_jobs_count()
-    if active >= settings.max_concurrent_jobs:
-        payload = {
-            "error": {
-                "type": "server_busy",
-                "message": "Server is busy. Please try again shortly.",
-                "details": {
-                    "active_jobs": active,
-                    "max_concurrent": settings.max_concurrent_jobs,
-                },
-            }
-        }
-        return JSONResponse(status_code=503, content=payload)
-
-    code = body.source_code or body.code_snippet
-    if not code:
-        raise HTTPException(
-            status_code=422, detail="Provide 'source_code' or 'code_snippet'."
-        )
-
-    job_id = job_manager.create_job()
-
-    async def job_coro():
-        return await _analyze_code_to_response(code)
-
-    import asyncio
-    asyncio.create_task(job_manager.run_job(job_id, job_coro))
-
-    return {"job_id": job_id}
-
-
-@app.get("/chat/status/{job_id}")
-async def chat_status(job_id: str) -> Dict[str, Any]:
-    job = _get_job(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="job not found")
-    return {
-        "job_id": job_id,
-        "status": job.get("status"),
-        "created_at": job.get("created_at"),
-    }
-
-
-@app.get("/chat/result/{job_id}")
-async def chat_result(job_id: str):
-    job = _get_job(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="job not found")
-    status = job.get("status")
-    if status == "done":
-        return JSONResponse(content=job.get("result") or {})
-    if status == "error":
-        raise HTTPException(status_code=500, detail=job.get("error") or "unknown error")
-    return JSONResponse(status_code=202, content={"job_id": job_id, "status": status})
-
-
-@app.delete("/chat/jobs/cleanup")
-async def chat_jobs_cleanup(ttl: int = Query(3600, ge=60, le=86400)) -> Dict[str, int]:
-    removed = _cleanup_jobs(ttl)
-    return {"removed": removed}
+# (Job endpoints including cleanup are provided by app.api.jobs router; duplicates removed.)
