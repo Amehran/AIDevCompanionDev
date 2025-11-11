@@ -103,12 +103,13 @@ def test_echo_endpoint(client):
     assert response.json() == {"received": payload}
 
 
-def test_chat_fast_mode(client):
-    """Test POST /chat?fast=true returns stub response without invoking LLM."""
-    response = client.post("/chat?fast=true", json={"source_code": "print('hello')"})
+def test_chat_stub_mode(client):
+    """Test POST /chat returns minimal stub response for Android client."""
+    response = client.post("/chat", json={"source_code": "print('hello')"})
     assert response.status_code == 200
     data = response.json()
-    assert data["summary"] == "OK (fast mode)"
+    assert isinstance(data["summary"], str)
+    assert data["summary"].startswith("Stub review OK")
     assert data["issues"] == []
 
 
