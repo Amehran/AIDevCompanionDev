@@ -97,79 +97,8 @@ async def echo(payload: Dict[str, Any]):
     return {"received": payload}
 
 
-@app.post("/chat")
-async def chat(
-    body: ChatRequest,
-    fast: bool = Query(
-        False, description="Return quick stub response for connectivity testing"
-    ),
-    settings: Settings = Depends(get_settings),
-):
-    logger.info("=== POST /chat received ===")
-    logger.info(f"Request body: {body}")
-    code = body.get_code()
-    if not code:
-        logger.error("No code provided in request")
-        raise HTTPException(
-            status_code=422, detail="Provide 'source_code' or 'code_snippet'."
-        )
-
-    try:
-        # Fast path to verify clients without invoking LLM
-        if fast:
-            logger.info("Fast=true -> returning stub response")
-            return ChatResponse(summary="OK (fast mode)", issues=[])
-
-        logger.info(f"Building crew for code: {code[:50]}...")
-        # Build the Crew and run with given inputs
-        project = CodeReviewProject()
-        crew = project.code_review_crew()
-        logger.info("Crew built, starting kickoff...")
-        # Run blocking LLM call in a worker thread so event loop stays responsive
-        raw_result = await run_in_threadpool(
-            lambda: crew.kickoff(inputs={"source_code": code})
-        )
-        logger.info("Kickoff complete!")
-
-        # raw_result may already be JSON string; attempt to parse
-        import json
-
-        parsed = None
-        try:
-            parsed = json.loads(str(raw_result))
-        except Exception:
-            logger.warning("Result not valid JSON, wrapping as summary text")
-            return ChatResponse(summary=str(raw_result), issues=[])
-
-        # Normalize structure
-        summary = parsed.get("summary") if isinstance(parsed, dict) else None
-        issues = []
-        if isinstance(parsed, dict) and isinstance(parsed.get("issues"), list):
-            for item in parsed["issues"]:
-                if isinstance(item, dict):
-                    issues.append(
-                        Issue(
-                            type=item.get("type"),
-                            description=item.get("description"),
-                            suggestion=item.get("suggestion"),
-                        )
-                    )
-        return ChatResponse(summary=summary, issues=issues)
-    except Exception as e:
-        # Structured error response
-        import traceback
-
-        logger.error(f"ERROR in /chat: {str(e)}")
-        trace = traceback.format_exc()
-        logger.error(trace)
-        payload = {
-            "error": {
-                "type": "internal_error",
-                "message": "An unexpected error occurred while analyzing the code.",
-                "details": str(e),
-            }
-        }
-        return JSONResponse(status_code=500, content=payload)
+# Note: The /chat endpoint is provided by app.api.chat router. We intentionally
+# avoid defining a duplicate handler here to prevent routing conflicts.
 
 
 # =========================
