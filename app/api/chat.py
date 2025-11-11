@@ -9,6 +9,7 @@ router = APIRouter()
 async def chat(
     body: ChatRequest,
     fast: bool = Query(False, description="Return quick stub response for connectivity testing"),
+    debug: bool = Query(False, description="Debug mode: skip OpenAI call and report diagnostics"),
     settings = Depends(get_settings),
 ):
     try:
@@ -18,6 +19,23 @@ async def chat(
 
         if fast:
             return ChatResponse(summary="OK (fast mode)", issues=[])
+
+        if debug:
+            # Do not call external APIs; just report import/config status
+            import_ok = False
+            openai_version = None
+            try:
+                import openai  # type: ignore
+                import_ok = True
+                openai_version = getattr(openai, "__version__", "unknown")
+            except Exception:
+                import_ok = False
+            has_key = bool(settings.openai_api_key)
+            model_name = settings.model or "gpt-4o-mini"
+            return ChatResponse(
+                summary=f"debug: import_ok={import_ok}, openai_version={openai_version}, has_key={has_key}, model={model_name}",
+                issues=[],
+            )
 
         # If running in test mode (dummy key), return stub to avoid external calls
         if (settings.openai_api_key or "").lower() in {"dummy", "test", "placeholder"}:
