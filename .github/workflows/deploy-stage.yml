@@ -110,6 +110,8 @@ jobs:
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }} \
             --handler lambda_handler.handler \
             --runtime python3.11 \
+            --timeout 25 \
+            --memory-size 256 \
             --region ${{ env.AWS_REGION }}
 
       - name: Wait for runtime config update
