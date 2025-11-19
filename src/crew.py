@@ -1,11 +1,16 @@
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Attempt to import crewai; fall back to lightweight stubs if unavailable (e.g. test environment)
 try:
     from crewai import Agent, Task, Crew  # type: ignore
     CREW_AVAILABLE = True
-except Exception:  # pragma: no cover - fallback path
+    logger.info("CrewAI imported successfully")
+except Exception as e:  # pragma: no cover - fallback path
     CREW_AVAILABLE = False
+    logger.warning(f"CrewAI import failed, using stub mode: {e}")
 
     class Agent:  # type: ignore
         def __init__(self, *args, **kwargs):
@@ -20,6 +25,7 @@ except Exception:  # pragma: no cover - fallback path
             pass
 
         def kickoff(self, inputs):  # Return deterministic JSON string
+            logger.warning("Using stub Crew.kickoff - CrewAI not available")
             return '{"summary": "OK (stub)", "issues": []}'
 
 
@@ -142,7 +148,16 @@ class CodeReviewProject:
     def code_review_crew(self) -> Crew:
         if not CREW_AVAILABLE:
             # Return stub Crew with deterministic kickoff
+            logger.warning("CrewAI not available, returning stub crew")
             return Crew()
+        
+        # Check if OpenAI API key is configured
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key or api_key.lower() in ["", "your-api-key-here", "dummy", "test", "placeholder"]:
+            logger.error("OPENAI_API_KEY not configured or invalid - CrewAI will not work properly")
+            # Could raise an exception here instead of silently failing
+            # raise ValueError("OPENAI_API_KEY environment variable must be set to use AI features")
+        
         review = self.code_review_task()
         format_json = self.json_formatter_task(review)
         return Crew(
