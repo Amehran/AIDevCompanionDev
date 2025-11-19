@@ -6,11 +6,14 @@ readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dependencies = [
     "fastapi>=0.121.0",
-    "mangum>=0.17.0",
     "uvicorn>=0.27.0",
-    "pydantic-settings>=2.0.0",
+    "crewai>=0.11.0",
     "python-dotenv>=1.0.0",
-    "openai>=1.0.0",
+    "pydantic-settings>=2.0.0",
+    # CrewAI currently imports ChromaDB APIs that changed in 1.x; pin to a compatible line
+    "chromadb>=0.4.24,<0.5.0",
+    # Many libs still expect NumPy 1.x
+    "numpy>=1.26,<2.0",
     # Ensure pkg_resources is available
     "setuptools>=68.0.0",
 ]
@@ -20,40 +23,4 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "httpx>=0.27.0",
-    "ruff>=0.6.8",
-    "mypy>=1.11.0",
-]
-
-[tool.ruff]
-line-length = 100
-target-version = "py311"
-exclude = [
-    "build",
-    "__pycache__",
-]
-
-[tool.ruff.lint]
-select = [
-    "F",   # Pyflakes (includes F401 unused imports)
-    "E",   # pycodestyle errors
-]
-ignore = [
-    "E501",  # line length handled separately
-]
-
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-check_untyped_defs = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-strict_equality = true
-exclude = [
-    "build/",
-    "tests/",
 ]

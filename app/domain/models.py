@@ -5,8 +5,10 @@ This module contains all Pydantic models used for request/response validation
 and serialization throughout the application.
 """
 
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Literal
 from pydantic import BaseModel, Field
+from datetime import datetime
+import uuid
 
 
 class ChatRequest(BaseModel):
@@ -14,6 +16,7 @@ class ChatRequest(BaseModel):
     Request model for code analysis endpoints.
     
     Supports both 'source_code' and legacy 'code_snippet' fields for compatibility.
+    Now includes conversation support for multi-turn interactions.
     """
     
     source_code: Optional[str] = Field(
@@ -25,6 +28,18 @@ class ChatRequest(BaseModel):
         default=None,
         description="Source code to analyze (legacy field)",
         min_length=1
+    )
+    conversation_id: Optional[str] = Field(
+        default=None,
+        description="ID of existing conversation to continue, or None to start new"
+    )
+    message: Optional[str] = Field(
+        default=None,
+        description="User message for conversational interaction (e.g., 'yes, fix it', 'explain the performance issue')"
+    )
+    apply_improvements: Optional[bool] = Field(
+        default=None,
+        description="Whether to apply suggested improvements"
     )
     extra: Optional[Dict[str, Any]] = Field(
         default=None,
@@ -43,7 +58,9 @@ class ChatRequest(BaseModel):
     model_config = {
         "json_schema_extra": {
             "example": {
-                "source_code": "fun main() { println(\"Hello\") }"
+                "source_code": "fun main() { println(\"Hello\") }",
+                "conversation_id": "abc123",
+                "message": "Yes, please fix the security issues"
             }
         }
     }
@@ -82,7 +99,7 @@ class ChatResponse(BaseModel):
     """
     Response model for code analysis endpoints.
     
-    Contains a summary of findings and a list of specific issues.
+    Contains a summary of findings, list of specific issues, and conversation context.
     """
     
     summary: Optional[str] = Field(
@@ -92,6 +109,22 @@ class ChatResponse(BaseModel):
     issues: Optional[List[Issue]] = Field(
         default=None,
         description="List of issues found in the code"
+    )
+    conversation_id: Optional[str] = Field(
+        default=None,
+        description="ID of the conversation for follow-up interactions"
+    )
+    improved_code: Optional[str] = Field(
+        default=None,
+        description="Improved version of the code (when user requested fixes)"
+    )
+    awaiting_user_input: Optional[bool] = Field(
+        default=False,
+        description="Whether the agent is waiting for user decision/input"
+    )
+    suggested_actions: Optional[List[str]] = Field(
+        default=None,
+        description="Suggested next actions for the user"
     )
     
     model_config = {
@@ -178,6 +211,152 @@ class ErrorResponse(BaseModel):
                     "message": "Too many requests. Try again in 42 seconds.",
                     "retry_after": 42,
                 }
+            }
+        }
+    }
+
+
+# ============================================================================
+# Conversation Models - For multi-turn stateful interactions
+# ============================================================================
+
+class Message(BaseModel):
+    """
+    Represents a single message in a conversation.
+    """
+    
+    role: Literal["user", "assistant"] = Field(
+        description="Who sent the message"
+    )
+    content: str = Field(
+        description="The message content"
+    )
+    timestamp: float = Field(
+        default_factory=lambda: datetime.now().timestamp(),
+        description="Unix timestamp when message was created"
+    )
+    metadata: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Additional message metadata (e.g., code snippets, issues found)"
+    )
+    
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "role": "user",
+                "content": "Analyze this code",
+                "timestamp": 1699401234.567,
+                "metadata": {"source_code": "fun main() { }"}
+            }
+        }
+    }
+
+
+class ConversationState(BaseModel):
+    """
+    Tracks the current state of a conversation.
+    """
+    
+    original_code: Optional[str] = Field(
+        default=None,
+        description="The original code submitted for analysis"
+    )
+    current_code: Optional[str] = Field(
+        default=None,
+        description="The current version of the code (after any applied fixes)"
+    )
+    detected_issues: Optional[List[Issue]] = Field(
+        default=None,
+        description="All issues detected in the original code"
+    )
+    pending_issues: Optional[List[str]] = Field(
+        default=None,
+        description="Issue types that haven't been fixed yet"
+    )
+    applied_fixes: Optional[List[str]] = Field(
+        default=None,
+        description="Issue types that have been fixed"
+    )
+    awaiting_decision: Optional[bool] = Field(
+        default=False,
+        description="Whether we're waiting for user to decide on improvements"
+    )
+    
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "original_code": "fun main() { }",
+                "current_code": "fun main() { }",
+                "pending_issues": ["PERFORMANCE", "SECURITY"],
+                "applied_fixes": [],
+                "awaiting_decision": True
+            }
+        }
+    }
+
+
+class Conversation(BaseModel):
+    """
+    Represents a complete conversation session.
+    """
+    
+    conversation_id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        description="Unique conversation identifier"
+    )
+    created_at: float = Field(
+        default_factory=lambda: datetime.now().timestamp(),
+        description="When conversation was started"
+    )
+    updated_at: float = Field(
+        default_factory=lambda: datetime.now().timestamp(),
+        description="Last message timestamp"
+    )
+    messages: List[Message] = Field(
+        default_factory=list,
+        description="Conversation message history"
+    )
+    state: ConversationState = Field(
+        default_factory=ConversationState,
+        description="Current conversation state"
+    )
+    
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "conversation_id": "abc123",
+                "created_at": 1699401234.567,
+                "updated_at": 1699401250.123,
+                "messages": [],
+                "state": {}
+            }
+        }
+    }
+
+
+class ConversationListResponse(BaseModel):
+    """
+    Response model for listing all conversations.
+    """
+    
+    conversations: List[Dict[str, Any]] = Field(
+        description="List of conversation summaries"
+    )
+    total: int = Field(
+        description="Total number of conversations"
+    )
+    
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "conversations": [
+                    {
+                        "conversation_id": "abc123",
+                        "created_at": 1699401234.567,
+                        "message_count": 5
+                    }
+                ],
+                "total": 1
             }
         }
     }
