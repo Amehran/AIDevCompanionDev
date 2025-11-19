@@ -13,7 +13,11 @@ from starlette.concurrency import run_in_threadpool
 router = APIRouter()
 
 async def _analyze_code(code: str) -> ChatResponse:
-    if (settings.openai_api_key or "").lower() in {"dummy", "test", "placeholder"}:
+    # Test mode bypass - check for test/placeholder keys
+    api_key_lower = (settings.openai_api_key or "").lower()
+    is_test_mode = any(keyword in api_key_lower for keyword in ["dummy", "test", "placeholder"])
+    
+    if is_test_mode:
         return ChatResponse(summary="OK (test mode)", issues=[])
     project = CodeReviewProject()
     crew = project.code_review_crew()

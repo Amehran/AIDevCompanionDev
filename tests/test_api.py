@@ -43,8 +43,12 @@ from main import app, _jobs, _jobs_lock
 
 
 @pytest.fixture(autouse=True)
-def reset_state():
+def reset_state(monkeypatch):
     """Reset global state before each test and reinstantiate rate limiter with test limits."""
+    # Set test environment variables
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key-placeholder")
+    monkeypatch.setenv("MODEL_NAME", "gpt-4o-mini")
+    
     from app.core.config import settings as _settings
     from app.core import di
     from app.services.rate_limiter import RateLimiter

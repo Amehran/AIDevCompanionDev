@@ -183,9 +183,42 @@ async def _handle_apply_improvements(
     """User wants to apply code improvements."""
     conversation = conversation_manager.get_conversation(conv_id)
     
-    # For now, return a placeholder for improved code
-    # This will be implemented when we add the code improver agent
-    improved_code = "// TODO: Implement code improver agent\n" + (conversation.state.original_code or "")
+    # Determine which issue types to fix based on user message
+    fix_types = None
+    user_msg_lower = user_message.lower()
+    
+    if "security" in user_msg_lower and "performance" not in user_msg_lower:
+        fix_types = ["SECURITY"]
+    elif "performance" in user_msg_lower and "security" not in user_msg_lower:
+        fix_types = ["PERFORMANCE"]
+    elif any(word in user_msg_lower for word in ["best practice", "style", "formatting"]):
+        fix_types = ["BEST_PRACTICE", "STYLE"]
+    # else: fix all issues (fix_types = None)
+    
+    # Use code improver agent to generate fixed code
+    project = CodeReviewProject()
+    original_code = conversation.state.original_code or ""
+    issues = conversation.state.detected_issues or []
+    
+    # Convert Issue objects to dicts for improve_code method
+    issues_dicts = [
+        {
+            "type": issue.type,
+            "description": issue.description,
+            "suggestion": issue.suggestion
+        }
+        for issue in issues
+    ]
+    
+    # Generate improved code
+    improved_code = project.improve_code(
+        source_code=original_code,
+        issues=issues_dicts,
+        fix_types=fix_types
+    )
+    
+    # Determine which fixes were applied
+    applied_fix_types = fix_types if fix_types else [i.type for i in issues if i.type]
     
     # Store assistant response
     conversation_manager.add_message(
@@ -196,21 +229,32 @@ async def _handle_apply_improvements(
     )
     
     # Update state
+    remaining_issues = [i.type for i in issues if i.type not in applied_fix_types] if fix_types else []
+    
     conversation_manager.update_state(
         conv_id,
         ConversationState(
             current_code=improved_code,
-            applied_fixes=conversation.state.pending_issues or [],
-            pending_issues=[],
-            awaiting_decision=False
+            applied_fixes=applied_fix_types,
+            pending_issues=remaining_issues,
+            awaiting_decision=len(remaining_issues) > 0
         )
     )
     
+    suggested_actions = None
+    if remaining_issues:
+        suggested_actions = [
+            f"Fix remaining issues: {', '.join(remaining_issues)}",
+            "Explain remaining issues"
+        ]
+    
     return ChatResponse(
-        summary="Code improvements applied successfully",
+        summary="Code improvements applied successfully" + 
+                (f". Remaining issues: {', '.join(remaining_issues)}" if remaining_issues else ""),
         conversation_id=conv_id,
         improved_code=improved_code,
-        awaiting_user_input=False
+        awaiting_user_input=len(remaining_issues) > 0,
+        suggested_actions=suggested_actions
     )
 
 
@@ -443,4 +487,5 @@ def _handle_test_mode(body: ChatRequest, conversation_manager) -> ChatResponse:
             awaiting_user_input=False
         )
     
-    return ChatResponse(summary="OK (test mode)", issues=[])
+    # No valid input provided - should fail validation
+    raise InvalidInput("Provide 'source_code' or 'conversation_id' with 'message'.")

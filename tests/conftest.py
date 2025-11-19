@@ -5,6 +5,11 @@ Shared pytest fixtures for all test modules.
 import pytest
 import asyncio
 import httpx
+import os
+
+# Set test environment variables before any imports
+os.environ.setdefault("OPENAI_API_KEY", "test-key-placeholder")
+os.environ.setdefault("MODEL_NAME", "gpt-4o-mini")
 
 
 class TestClient:
