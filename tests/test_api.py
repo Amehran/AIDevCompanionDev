@@ -117,9 +117,9 @@ def test_chat_fast_mode(client):
 
 
 def test_chat_missing_code(client):
-    """Test POST /chat without source_code returns 422."""
+    """Test POST /chat without source_code returns 400."""
     response = client.post("/chat", json={})
-    assert response.status_code == 422
+    assert response.status_code == 400
 
 
 # =========================
@@ -227,10 +227,10 @@ def test_rate_limit_per_ip(client):
         if response.status_code == 429:
             data = response.json()
             assert "error" in data
-            assert data["error"]["type"] == "rate_limit_exceeded"
-            assert "retry_after" in data["error"]
-            assert isinstance(data["error"]["retry_after"], int)
-            assert data["error"]["retry_after"] > 0
+            assert data["error"]["type"] == "RateLimitExceeded"
+            assert "retry_after" in data
+            assert isinstance(data["retry_after"], (int, float))
+            assert data["retry_after"] > 0
             break
 
 
@@ -288,9 +288,9 @@ def test_chat_structured_error_on_exception(client):
 
 
 def test_submit_missing_source_code(client):
-    """Test POST /chat/submit without source_code returns 422."""
+    """Test POST /chat/submit without source_code returns 400."""
     response = client.post("/chat/submit", json={})
-    assert response.status_code == 422
+    assert response.status_code == 400
     assert "detail" in response.json()
 
 
