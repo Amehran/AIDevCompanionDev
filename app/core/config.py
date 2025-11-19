@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     model: str = Field(default="gpt-4o-mini", description="OpenAI model to use")
     model_name: Optional[str] = Field(default=None, description="Alternative model name (legacy)")
     
+    # Rate Limiting
+    rate_limit_per_minute: int = Field(default=60, description="Rate limit for API requests per minute")
+    
+    # Job Management
+    max_concurrent_jobs: int = Field(default=5, description="Maximum number of concurrent background jobs")
+    
     # Pydantic v2: model configuration
     model_config = SettingsConfigDict(
         env_file=".env",
