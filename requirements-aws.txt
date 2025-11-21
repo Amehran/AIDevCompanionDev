@@ -4,4 +4,5 @@ fastapi==0.121.0
 mangum>=0.17.0,<0.18.0
 pydantic-settings>=2.0.0
 openai>=1.0.0
-# crewai is too large for direct deployment - TODO: use Lambda Layer or Container Image
+# crewai is t   oo large for direct deployment - TODO: use Lambda Layer or Container Image
+mangum
