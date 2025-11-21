@@ -4,10 +4,12 @@ FROM public.ecr.aws/lambda/python:3.11-arm64
 WORKDIR /var/task
 
 # Copy and install dependencies
-# We are assuming 'requirements.txt' (which includes mangum) contains all Python dependencies
-COPY requirements.txt .
-# Install packages. Use --platform linux/arm64 to ensure any platform-specific wheels are fetched.
-RUN pip install --no-cache-dir -r requirements.txt --platform linux/arm64 --only-binary :all:
+
+# We are assuming 'requirements-aws.txt' (which includes mangum) contains all Python dependencies
+COPY requirements-aws.txt .
+# FIX: Removed --platform and --only-binary flags to prevent conflict with modern pip versions.
+# Since we are already running on an ARM64 base image, pip will install the correct wheels.
+RUN pip install --no-cache-dir -r requirements-aws.txt
 
 # Copy your application code (main.py, src/, app/, etc.)
 COPY . .
