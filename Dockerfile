@@ -1,48 +1,56 @@
-# Base image (Python 3.12 for PyO3/tiktoken compatibility)
-FROM python:3.12-slim
+# We MUST use the AL2 base to fix the persistent "unsupported media type" error 
+# with cross-compiled ARM64 images in AWS Lambda.
+FROM public.ecr.aws/lambda/python:3.9
+WORKDIR /var/task
 
-# Environment settings for predictable Python behavior
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+# 1. Install Base Build Tools (Use yum, as this is Amazon Linux 2)
+RUN yum update -y && \
+    yum install -y \
+    gcc gcc-c++ make bzip2-devel libffi-devel openblas-devel wget tar xz-devel \
+    sqlite-devel zlib-devel readline-devel findutils patch gzip pkgconfig perl \
+    # ldconfig is typically available, but glibc-devel is a safe inclusion for AL2
+    glibc-devel && \
+    yum clean all
 
-# Set working directory
-WORKDIR /app
+# 2. Install Rust (Required for 'hf-xet')
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Install system dependencies (curl for healthcheck, gcc + python dev for wheels)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    build-essential \
-    python3-dev \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# 3. Build OpenSSL 1.1.1w and Prepare Linker
+RUN wget --tries=5 --waitretry=5 https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1w/openssl-1.1.1w.tar.gz && \
+    tar xzf openssl-1.1.1w.tar.gz && \
+    cd openssl-1.1.1w && \
+    ./config --prefix=/usr/local/openssl --openssldir=/usr/local/openssl no-shared && \
+    make -j$(nproc) && make install_sw
 
-# Install Poetry 2.x to match lock format (supports PEP 621 [project])
-RUN pip install "poetry==2.2.1"
+# 4. Update Linker Cache and Library Path (Using the absolute path for reliability)
+RUN /sbin/ldconfig
+ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 
-# Copy Poetry configuration files first for better caching
-COPY pyproject.toml poetry.lock* ./
+# 5. Build and Install Python 3.11 (Consolidated steps)
+RUN wget https://www.python.org/ftp/python/3.11.8/Python-3.11.8.tgz && \
+    tar xzf Python-3.11.8.tgz && \
+    cd Python-3.11.8 && \
+    CPPFLAGS="-I/usr/local/openssl/include" LDFLAGS="-L/usr/local/openssl/lib -Wl,-rpath=/usr/local/lib" \
+    ./configure --enable-optimizations --enable-shared --with-openssl=/usr/local/openssl && \
+    make -j$(nproc) && make install
 
-# Configure Poetry to install into the system (no venv)
-RUN poetry config virtualenvs.create false
+# 6. Environment Setup and Install Python Build Tools
+# This installs tools into the new Python 3.11 environment
+RUN ln -sf /usr/local/bin/python3.11 /usr/bin/python3 && \
+    ln -sf /usr/local/bin/pip3.11 /usr/bin/pip3 && \
+    python3 -m ensurepip && pip3 install --upgrade pip && \
+    pip3 install wheel setuptools meson meson-python cython ninja
 
-# Install project dependencies (without installing the project itself)
-RUN poetry install --no-interaction --no-ansi --no-root
+# 7. Install Dependencies (Directly into /var/task/python)
+RUN pip3 install --no-build-isolation --prefix=/var/task/python "numpy>=1.22.5,<3"
+COPY requirements-aws.txt ./
+RUN pip3 install --prefix=/var/task/python -r requirements-aws.txt
 
-# Copy the rest of the application
+# 8. Final App Code and Configuration
 COPY . .
+ENV PYTHONPATH=/var/task/python/lib/python3.11/site-packages
 
-# Create a non-root user and adjust ownership
-RUN useradd --create-home --shell /bin/bash appuser \
-    && chown -R appuser:appuser /app
-USER appuser
-
-# Expose the port the app runs on
-EXPOSE 8000
-
-# Optional container healthcheck (expects 200 on GET /)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS http://localhost:8000/ || exit 1
-
-# Run the application (uvicorn installed globally because Poetry used --no-venv)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Set the ENTRYPOINT to the custom compiled Python 3.11 binary
+ENTRYPOINT ["/var/task/python/bin/python3.11"]
+CMD ["lambda_handler.handler"]
