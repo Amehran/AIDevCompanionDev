@@ -53,4 +53,5 @@ ENV PYTHONPATH=/var/task/python/lib/python3.11/site-packages
 
 # Set the ENTRYPOINT to the custom compiled Python 3.11 binary
 ENTRYPOINT ["/var/task/python/bin/python3.11"]
-CMD ["lambda_handler.handler"]
+ENV MANGUM_APPLICATION_PATH="main.app"
+CMD [ "mangum.handler" ]
