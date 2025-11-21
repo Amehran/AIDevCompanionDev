@@ -4,6 +4,7 @@ FROM public.ecr.aws/lambda/python:3.11-arm64
 WORKDIR /var/task
 
 # Copy and install dependencies
+
 # We are assuming 'requirements-aws.txt' (which includes mangum) contains all Python dependencies
 COPY requirements-aws.txt .
 # FIX: Removed --platform and --only-binary flags to prevent conflict with modern pip versions.
