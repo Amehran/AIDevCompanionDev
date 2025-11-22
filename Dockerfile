@@ -11,6 +11,7 @@ COPY requirements-aws.txt .
 # Since we are already running on an ARM64 base image, pip will install the correct wheels.
 RUN pip install --no-cache-dir -r requirements-aws.txt
 
+
 # Copy your application code (main.py, src/, app/, etc.)
 COPY . .
 
@@ -18,5 +19,5 @@ COPY . .
 # This tells the Lambda runtime to use the 'mangum.handler' function, 
 # which will then look for the 'app' object in the 'main' module (main.py).
 # MANGUM_APPLICATION_PATH is the critical environment variable for Mangum.
-ENV MANGUM_APPLICATION_PATH="main.app"
-CMD [ "mangum.handler" ]
+
+CMD [ "main.handler" ]

@@ -16,6 +16,7 @@ dependencies = [
     "numpy>=1.26,<2.0",
     # Ensure pkg_resources is available
     "setuptools>=68.0.0",
+    "mangum>=0.19.0",
 ]
 
 [dependency-groups]
