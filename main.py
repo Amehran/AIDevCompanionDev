@@ -18,7 +18,8 @@ from app.core.error_handlers import register_exception_handlers
 from mangum import Mangum
 
 # Structured exceptions available for future use
-# Placeholder: structured exceptions available for future integration
+# Placeholder: structurued exceptions available for future integration
+# Placeholder: structurued exceptions available for future integration
 # (Removed unused imports to satisfy lint.)
 from app.domain.models import (
     ChatRequest,
@@ -42,7 +43,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 app = FastAPI()
-handletr = Mangum(app)
+handler = Mangum(app)
 # Initialize services (use DI singletons)
 
 # Expose internal state for tests (back-compat with tests/test_api.py)
