@@ -15,6 +15,8 @@ from app.api.jobs import router as jobs_router
 from app.api.conversations import router as conversations_router
 from app.api.conversations import router as conversations_router
 from app.core.error_handlers import register_exception_handlers
+from mangum import Mangum
+
 # Structured exceptions available for future use
 # Placeholder: structured exceptions available for future integration
 # (Removed unused imports to satisfy lint.)
@@ -40,6 +42,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 app = FastAPI()
+handletr = Mangum(app)
 # Initialize services (use DI singletons)
 
 # Expose internal state for tests (back-compat with tests/test_api.py)
@@ -67,6 +70,7 @@ async def basic_logging(request, call_next):
 
         logger.error(traceback.format_exc())
         raise
+
 
 register_exception_handlers(app)
 
@@ -277,6 +281,7 @@ async def submit_chat(
         return await _analyze_code_to_response(code)
 
     import asyncio
+
     asyncio.create_task(job_manager.run_job(job_id, job_coro))
 
     return {"job_id": job_id}
