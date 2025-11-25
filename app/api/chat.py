@@ -4,7 +4,6 @@ from starlette.concurrency import run_in_threadpool
 from app.core.di import get_settings, get_conversation_manager
 from app.domain.models import ChatRequest, ChatResponse, Issue, ConversationState
 from src.crew import CodeReviewProject  # type: ignore
-import json
 
 router = APIRouter()
 
@@ -26,13 +25,6 @@ async def chat(
     # Fast mode bypass
     if fast:
         return ChatResponse(summary="OK (fast mode)", issues=[])
-    
-    # Test mode bypass - check for test/placeholder keys
-    api_key_lower = (settings.openai_api_key or "").lower()
-    is_test_mode = any(keyword in api_key_lower for keyword in ["dummy", "test", "placeholder"])
-    
-    if is_test_mode:
-        return _handle_test_mode(body, conversation_manager)
     
     # === Case 1: New conversation with code analysis ===
     if body.get_code() and not body.conversation_id:
@@ -67,16 +59,9 @@ async def _handle_new_analysis(
         metadata={"source_code": code}
     )
     
-    # Run code review
+    # Run code review using Bedrock
     project = CodeReviewProject()
-    crew = project.code_review_crew()
-    raw_result = await run_in_threadpool(lambda: crew.kickoff(inputs={"source_code": code}))
-    
-    # Parse results
-    try:
-        parsed = json.loads(str(raw_result))
-    except Exception:
-        parsed = {"summary": str(raw_result), "issues": []}
+    parsed = await run_in_threadpool(lambda: project.code_review(code))
     
     summary = parsed.get("summary") if isinstance(parsed, dict) else None
     issues = []
@@ -288,10 +273,7 @@ async def _handle_general_question(
     settings
 ) -> ChatResponse:
     """Handle explanations or general questions about the code."""
-    conversation = conversation_manager.get_conversation(conv_id)
-    
-    # Get conversation context
-    context = conversation_manager.get_conversation_context(conv_id)
+    # Get conversation context if needed in future
     
     # For now, return a simple response
     # This will be enhanced when we add conversational AI agent
@@ -336,57 +318,9 @@ async def _handle_new_code_in_conversation(
     # But keep the same conversation
     result = await _handle_new_analysis(new_request, conversation_manager, settings)
     result.conversation_id = conv_id  # Maintain same conversation
-    
     return result
 
 
-def _handle_test_mode(body: ChatRequest, conversation_manager) -> ChatResponse:
-    """Handle test mode with stub responses."""
-    # Create conversation if new code provided
-    if body.get_code() and not body.conversation_id:
-        conv_id = conversation_manager.create_conversation()
-        
-        # Simulate finding issues in test mode
-        test_issues = []
-        if "password" in body.get_code().lower() or "secret" in body.get_code().lower():
-            test_issues.append(
-                Issue(
-                    type="SECURITY",
-                    description="Hardcoded credentials detected",
-                    suggestion="Use environment variables or secure vault"
-                )
-            )
-        
-        if "for" in body.get_code().lower() and "println" in body.get_code().lower():
-            test_issues.append(
-                Issue(
-                    type="PERFORMANCE", 
-                    description="Inefficient loop with I/O operations",
-                    suggestion="Use bulk operations or optimize I/O"
-                )
-            )
-        
-        # Store state
-        conversation_manager.update_state(
-            conv_id,
-            ConversationState(
-                original_code=body.get_code(),
-                current_code=body.get_code(),
-                detected_issues=test_issues,
-                pending_issues=[i.type for i in test_issues if i.type],
-                awaiting_decision=len(test_issues) > 0
-            )
-        )
-        
-        return ChatResponse(
-            summary="OK (test mode)",
-            issues=test_issues,
-            conversation_id=conv_id,
-            awaiting_user_input=len(test_issues) > 0,
-            suggested_actions=["Apply fixes", "Explain issues"] if test_issues else None
-        )
-    
-    # Continue conversation
     if body.conversation_id:
         conversation = conversation_manager.get_conversation(body.conversation_id)
         if not conversation:

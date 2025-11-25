@@ -13,25 +13,14 @@ from starlette.concurrency import run_in_threadpool
 router = APIRouter()
 
 async def _analyze_code(code: str) -> ChatResponse:
-    # Test mode bypass - check for test/placeholder keys
-    api_key_lower = (settings.openai_api_key or "").lower()
-    is_test_mode = any(keyword in api_key_lower for keyword in ["dummy", "test", "placeholder"])
     
-    if is_test_mode:
-        return ChatResponse(summary="OK (test mode)", issues=[])
     project = CodeReviewProject()
-    crew = project.code_review_crew()
-    raw_result = await run_in_threadpool(lambda: crew.kickoff(inputs={"source_code": code}))
-    import json
-    try:
-        parsed = json.loads(str(raw_result))
-    except Exception:
-        return ChatResponse(summary=str(raw_result), issues=[])
-    summary = parsed.get("summary") if isinstance(parsed, dict) else None
+    result = await run_in_threadpool(lambda: project.code_review(code))
+    summary = result.get("summary") if isinstance(result, dict) else None
     issues = []
-    if isinstance(parsed, dict) and isinstance(parsed.get("issues"), list):
+    if isinstance(result, dict) and isinstance(result.get("issues"), list):
         from app.domain.models import Issue
-        for item in parsed["issues"]:
+        for item in result["issues"]:
             if isinstance(item, dict):
                 issues.append(
                     Issue(

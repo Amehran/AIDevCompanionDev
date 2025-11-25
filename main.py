@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 import sys
 import logging
 
-from src.crew import CodeReviewProject  # type: ignore
+from app.bedrock.client import BedrockClient
 from app.core.config import Settings, get_settings, settings
 from app.core.di import rate_limiter, job_manager
 from app.api.health import router as health_router
@@ -123,20 +123,15 @@ async def chat(
             logger.info("Fast=true -> returning stub response")
             return ChatResponse(summary="OK (fast mode)", issues=[])
 
-        logger.info(f"Building crew for code: {code[:50]}...")
-        # Build the Crew and run with given inputs
-        project = CodeReviewProject()
-        crew = project.code_review_crew()
-        logger.info("Crew built, starting kickoff...")
-        # Run blocking LLM call in a worker thread so event loop stays responsive
+        logger.info(f"Invoking Bedrock for code: {code[:50]}...")
+        bedrock_client = BedrockClient()
+        # Run blocking Bedrock call in a worker thread so event loop stays responsive
         raw_result = await run_in_threadpool(
-            lambda: crew.kickoff(inputs={"source_code": code})
+            lambda: bedrock_client.invoke(prompt=code)
         )
-        logger.info("Kickoff complete!")
+        logger.info("Bedrock invocation complete!")
 
-        # raw_result may already be JSON string; attempt to parse
         import json
-
         parsed = None
         try:
             parsed = json.loads(str(raw_result))
@@ -157,11 +152,13 @@ async def chat(
                             suggestion=item.get("suggestion"),
                         )
                     )
+        # If Claude returns only a completion string, use it as summary
+        if not summary and isinstance(parsed, str):
+            summary = parsed
         return ChatResponse(summary=summary, issues=issues)
     except Exception as e:
         # Structured error response
         import traceback
-
         logger.error(f"ERROR in /chat: {str(e)}")
         trace = traceback.format_exc()
         logger.error(trace)
@@ -192,16 +189,12 @@ def _cleanup_jobs(ttl_seconds: int = 3600) -> int:
 
 async def _analyze_code_to_response(code: str) -> ChatResponse:
     logger.info(f"[job] Analyzing code len={len(code)}")
-    # Test-mode shortcut: when using a dummy/test API key, avoid real LLM calls
-    if (settings.openai_api_key or "").lower() in {"dummy", "test", "placeholder"}:
-        return ChatResponse(summary="OK (test mode)", issues=[])
-    project = CodeReviewProject()
-    crew = project.code_review_crew()
+    from app.bedrock.client import BedrockClient
+    bedrock_client = BedrockClient()
     raw_result = await run_in_threadpool(
-        lambda: crew.kickoff(inputs={"source_code": code})
+        lambda: bedrock_client.invoke(prompt=code)
     )
     import json
-
     try:
         parsed = json.loads(str(raw_result))
     except Exception:

@@ -38,10 +38,24 @@ class ServerBusy(AppException):
     """Raised when server has too many concurrent jobs."""
     status_code = 503
     
+
     def __init__(self, active_jobs: int, max_concurrent: int):
         self.active_jobs = active_jobs
         self.max_concurrent = max_concurrent
         super().__init__(f"Server busy: {active_jobs}/{max_concurrent} jobs active")
+
+    def to_dict(self):
+        # Override error type to match test expectation and add details field
+        return {
+            "error": {
+                "type": "server_busy",
+                "message": str(self),
+                "details": {
+                    "active_jobs": self.active_jobs,
+                    "max_concurrent": self.max_concurrent
+                }
+            }
+        }
 
 
 class JobNotFound(AppException):

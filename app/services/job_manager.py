@@ -49,6 +49,14 @@ class JobManager:
         self.set_status(job_id, "running")
         try:
             result = await coro_factory()
+            # If result is None or empty dict, treat as error
+            if result is None or (isinstance(result, dict) and not result):
+                self.set_status(job_id, "error", error="No result returned from code review.", completed_at=time.time())
+                return
+            # If result contains an 'error' field, treat as error
+            if isinstance(result, dict) and result.get("error"):
+                self.set_status(job_id, "error", error=result.get("summary", "Bedrock error"), completed_at=time.time())
+                return
             stored = result.model_dump() if hasattr(result, "model_dump") else result
             self.set_status(job_id, "done", result=stored, completed_at=time.time())
         except Exception as e:  # pragma: no cover - best-effort logging
