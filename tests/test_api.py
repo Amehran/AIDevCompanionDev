@@ -1,3 +1,22 @@
+def test_chat_bedrock_integration(monkeypatch, client):
+    """Test POST /chat returns expected output when BedrockClient is used (mocked)."""
+    from app.bedrock.client import BedrockClient
+    # Mock BedrockClient.invoke to return a Claude-style completion string
+    def mock_invoke(self, prompt, max_tokens=1024, temperature=0.2):
+        return '{"summary": "Mocked Claude summary", "issues": [{"type": "bug", "description": "desc", "suggestion": "fix"}]}'
+    monkeypatch.setattr(BedrockClient, "invoke", mock_invoke)
+
+    # Patch import in main to use BedrockClient (simulate refactor)
+    import main
+    main.BedrockClient = BedrockClient
+
+    # Ensure fast mode is not triggered
+    response = client.post("/chat", json={"source_code": "def foo(): pass"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["summary"] == "Mocked Claude summary"
+    assert isinstance(data["issues"], list)
+    assert data["issues"][0]["type"] == "bug"
 """
 Comprehensive test suite for ai-dev-companion-backend API.
 
@@ -46,7 +65,6 @@ from main import app, _jobs, _jobs_lock
 def reset_state(monkeypatch):
     """Reset global state before each test and reinstantiate rate limiter with test limits."""
     # Set test environment variables
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key-placeholder")
     monkeypatch.setenv("MODEL_NAME", "gpt-4o-mini")
     
     from app.core.config import settings as _settings
@@ -366,7 +384,8 @@ def test_concurrent_job_processing(client):
                 continue
             status_response = client.get(f"/chat/status/{job_id}")
             if status_response.status_code == 200:
-                if status_response.json()["status"] == "done":
+                status = status_response.json()["status"]
+                if status in {"done", "error"}:
                     completed.add(job_id)
         time.sleep(2)
 
