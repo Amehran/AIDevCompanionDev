@@ -7,7 +7,7 @@ from typing import Dict, Any
 from app.core.di import get_settings, get_rate_limiter, get_job_manager
 from app.domain.models import ChatRequest, ChatResponse
 from app.core.di import settings
-from src.crew import CodeReviewProject  # type: ignore
+from src.crew import CodeReviewProject
 from starlette.concurrency import run_in_threadpool
 
 router = APIRouter()

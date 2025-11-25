@@ -17,10 +17,7 @@ from app.api.conversations import router as conversations_router
 from app.core.error_handlers import register_exception_handlers
 from mangum import Mangum
 
-# Structured exceptions available for future use
-# Placeholder: structurued exceptions available for future integration
-# Placeholder: structurued exceptions available for future integration
-# (Removed unused imports to satisfy lint.)
+## Structured exceptions available for future use
 from app.domain.models import (
     ChatRequest,
     ChatResponse,

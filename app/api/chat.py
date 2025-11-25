@@ -10,7 +10,7 @@ router = APIRouter()
 @router.post("/chat")
 async def chat(
     body: ChatRequest,
-    fast: bool = Query(False, description="Return quick stub response for connectivity testing"),
+    fast: bool = Query(False, description="(legacy, not used; always Bedrock-only)"),
     settings = Depends(get_settings),
     conversation_manager = Depends(get_conversation_manager),
 ):
@@ -22,19 +22,20 @@ async def chat(
     2. If conversation_id exists: continue conversation (apply fixes, explain, etc.)
     """
     
-    # Fast mode bypass
-    if fast:
-        return ChatResponse(summary="OK (fast mode)", issues=[])
+
     
-    # === Case 1: New conversation with code analysis ===
+
+    # Case 1: New conversation with code analysis
     if body.get_code() and not body.conversation_id:
         return await _handle_new_analysis(body, conversation_manager, settings)
     
-    # === Case 2: Continue existing conversation ===
+
+    # Case 2: Continue existing conversation
     if body.conversation_id:
         return await _handle_conversation_continuation(body, conversation_manager, settings)
     
-    # === Case 3: Invalid request ===
+
+    # Case 3: Invalid request
     raise InvalidInput("Provide 'source_code' or 'conversation_id' with 'message'.")
 
 
