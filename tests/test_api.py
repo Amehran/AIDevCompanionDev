@@ -34,29 +34,6 @@ import time
 import asyncio
 import httpx
 
-class TestClient:
-    """Sync wrapper around httpx.AsyncClient+ASGITransport for compatibility."""
-    def __init__(self, app, base_url: str = "http://testserver") -> None:
-        self.app = app
-        self.base_url = base_url
-
-    def request(self, method: str, url: str, **kwargs):
-        async def _do():
-            async with httpx.AsyncClient(
-                transport=httpx.ASGITransport(app=self.app), base_url=self.base_url
-            ) as ac:
-                return await ac.request(method, url, **kwargs)
-
-        return asyncio.run(_do())
-
-    def get(self, url: str, **kwargs):
-        return self.request("GET", url, **kwargs)
-
-    def post(self, url: str, **kwargs):
-        return self.request("POST", url, **kwargs)
-
-    def delete(self, url: str, **kwargs):
-        return self.request("DELETE", url, **kwargs)
 
 from main import app, _jobs, _jobs_lock
 
