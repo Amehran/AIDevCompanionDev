@@ -5,11 +5,7 @@ logger = logging.getLogger(__name__)
 
 
 class CodeReviewProject:
-    """Android-focused review + JSON formatting crew (compatible with installed CrewAI).
-
-    Provides deterministic stub behavior when crewai dependency isn't available so tests
-    and local development without full vector DB / embedding stack still function.
-    """
+    """Code review orchestration using AWS Bedrock Claude. Bedrock-only implementation."""
 
     def __init__(self):
         self.bedrock = BedrockClient()
