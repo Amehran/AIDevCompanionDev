@@ -4,6 +4,9 @@ from starlette.concurrency import run_in_threadpool
 from app.core.di import get_settings, get_conversation_manager
 from app.domain.models import ChatRequest, ChatResponse, Issue, ConversationState
 from src.crew import CodeReviewProject  # type: ignore
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -42,7 +45,8 @@ async def chat(
 async def _handle_new_analysis(
     body: ChatRequest,
     conversation_manager,
-    settings
+    settings,
+    fast: bool = False
 ) -> ChatResponse:
     """Handle initial code analysis and create new conversation."""
     code = body.get_code()
@@ -60,22 +64,50 @@ async def _handle_new_analysis(
         metadata={"source_code": code}
     )
     
-    # Run code review using Bedrock
-    project = CodeReviewProject()
-    parsed = await run_in_threadpool(lambda: project.code_review(code))
-    
-    summary = parsed.get("summary") if isinstance(parsed, dict) else None
-    issues = []
-    if isinstance(parsed, dict) and isinstance(parsed.get("issues"), list):
-        for item in parsed["issues"]:
-            if isinstance(item, dict):
-                issues.append(
-                    Issue(
-                        type=item.get("type"),
-                        description=item.get("description"),
-                        suggestion=item.get("suggestion"),
-                    )
-                )
+    try:
+        # Fast path to verify clients without invoking LLM
+        if fast:
+            logger.info("Fast=true -> returning stub response")
+            summary = "OK (fast mode)"
+            issues = []
+        else:
+            logger.info(f"Invoking KotlinAnalysisSwarm for code: {code[:50]}...")
+            
+            from app.services.agents import KotlinAnalysisSwarm
+            swarm = KotlinAnalysisSwarm()
+            
+            # Run the swarm analysis
+            result = await swarm.analyze(code)
+            
+            logger.info("Swarm analysis complete!")
+
+            # Normalize structure
+            summary = result.get("summary")
+            issues = []
+            if isinstance(result.get("issues"), list):
+                for item in result["issues"]:
+                    if isinstance(item, dict):
+                        issues.append(
+                            Issue(
+                                type=item.get("type", "general"),
+                                description=item.get("description", ""),
+                                suggestion=item.get("suggestion", ""),
+                            )
+                        )
+    except Exception as e:
+        # Structured error response
+        import traceback
+        logger.error(f"ERROR in /chat: {str(e)}")
+        trace = traceback.format_exc()
+        logger.error(trace)
+        payload = {
+            "error": {
+                "type": "internal_error",
+                "message": "An unexpected error occurred while analyzing the code.",
+                "details": str(e),
+            }
+        }
+        return JSONResponse(status_code=500, content=payload)
     
     # Update conversation state
     conversation_manager.update_state(

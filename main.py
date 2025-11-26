@@ -7,11 +7,10 @@ import sys
 import logging
 
 from app.bedrock.client import BedrockClient
-from app.core.config import Settings, get_settings, settings
+from app.core.config import Settings, get_settings
 from app.core.di import rate_limiter, job_manager
 from app.api.health import router as health_router
 from app.api.chat import router as chat_router
-from app.api.jobs import router as jobs_router
 from app.api.conversations import router as conversations_router
 from app.api.conversations import router as conversations_router
 from app.core.error_handlers import register_exception_handlers
@@ -75,7 +74,6 @@ register_exception_handlers(app)
 # Include routers
 app.include_router(health_router)
 app.include_router(chat_router)
-app.include_router(jobs_router)
 app.include_router(conversations_router)
 app.include_router(conversations_router)
 
