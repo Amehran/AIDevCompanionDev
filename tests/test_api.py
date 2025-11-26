@@ -27,15 +27,13 @@ Tests cover:
 - Structured error responses
 """
 
+
 import pytest
 import time
-
-# Compatible TestClient wrapper: try Starlette's, fallback to httpx+ASGITransport for newer httpx
 import asyncio
 import httpx
-
-
 from main import app, _jobs, _jobs_lock
+from tests.conftest import TestClient
 
 
 @pytest.fixture(autouse=True)
@@ -68,10 +66,7 @@ def reset_state(monkeypatch):
         di.rate_limiter._buckets.clear()
 
 
-@pytest.fixture
-def client():
-    """FastAPI test client fixture."""
-    return TestClient(app)
+
 
 
 # =========================

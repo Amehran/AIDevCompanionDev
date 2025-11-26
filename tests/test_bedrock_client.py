@@ -15,19 +15,27 @@ def bedrock_stub():
 
 def test_bedrock_invoke_success(monkeypatch, bedrock_stub):
     client, stubber = bedrock_stub
-    # Prepare mock response
+    # Prepare mock streaming response for invoke_model_with_response_stream
     expected_completion = "This is a test completion."
-    response_body = {
-        "completion": expected_completion
+    # Simulate the streaming response structure as a dict for body
+    streaming_body = {
+        "chunk": {
+            "bytes": json.dumps({"contentBlock": {"text": expected_completion}}).encode()
+        }
     }
     stubber.add_response(
-        "invoke_model",
-        {"body": io.BytesIO(bytes(json.dumps(response_body), "utf-8")), "contentType": "application/json"},
+        "invoke_model_with_response_stream",
+        {"body": streaming_body, "contentType": "application/json"},
         {
             "modelId": "anthropic.claude-3-sonnet-20240229-v1:0",
             "contentType": "application/json",
             "accept": "application/json",
-            "body": json.dumps({"prompt": "test", "max_tokens": 1024, "temperature": 0.2})
+            "body": json.dumps({
+                "messages": [{"role": "user", "content": "test"}],
+                "max_tokens": 1024,
+                "temperature": 0.2,
+                "anthropic_version": "bedrock-2023-05-31"
+            })
         }
     )
     stubber.activate()

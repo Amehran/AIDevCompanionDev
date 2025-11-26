@@ -79,9 +79,10 @@ class CodeReviewProject:
             }
 
     
-    def improve_code(self, source_code: str, issues: list, language: str = "kotlin") -> str:
+    def improve_code(self, source_code: str, issues: list, fix_types=None, context=None, language: str = "kotlin") -> str:
         """
         Use Bedrock Claude to generate improved code based on issues.
+        Returns the original code if Bedrock returns an empty response.
         """
         issues_text = json.dumps(issues, indent=2)
         prompt = (
@@ -89,7 +90,15 @@ class CodeReviewProject:
             f"Issues to fix:\n{issues_text}\n\n"
             "Generate improved code that fixes all the issues, preserves functionality, maintains structure, and uses idiomatic patterns. Output ONLY the improved code, no explanations, no markdown fences, no extra text."
         )
+        # Optionally add fix_types and context to the prompt for more control
+        if fix_types:
+            prompt += f"\n\nOnly fix these types of issues: {', '.join(fix_types)}."
+        if context:
+            prompt += f"\n\nConversation context: {json.dumps(context)}"
         response = self.bedrock.invoke(prompt + "\n\nAssistant:")
+        if not response or not response.strip():
+            # If Bedrock returns nothing, fallback to original code
+            return source_code
         return response
     
     
