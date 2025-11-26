@@ -17,8 +17,8 @@ jobs:
     environment: staging
     env:
       AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
-      ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY || vars.ECR_REPOSITORY }}
-      LAMBDA_FUNCTION_NAME: ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }}
+      ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY || vars.ECR_REPOSITORY || 'ai-dev-companion' }}
+      LAMBDA_FUNCTION_NAME: ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME || 'ai-dev-companion' }}
 
     steps:
       - name: Checkout code
