@@ -17,7 +17,8 @@ def test_bedrock_invoke_success(monkeypatch, bedrock_stub):
     client, stubber = bedrock_stub
     # Prepare mock streaming response for invoke_model_with_response_stream
     expected_completion = "This is a test completion."
-    # Simulate the streaming response structure as a dict for body
+    # Simulate the streaming response structure as an iterable of event dicts
+    # The stub expects 'body' to be a dict, not a list
     streaming_body = {
         "chunk": {
             "bytes": json.dumps({"contentBlock": {"text": expected_completion}}).encode()

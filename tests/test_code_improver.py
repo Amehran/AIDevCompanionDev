@@ -11,20 +11,11 @@ from src.crew import CodeReviewProject
 
 class TestCodeImproverAgent:
     def setup_method(self):
-        # Patch BedrockClient.invoke to return improved code for all tests
+        # Patch BedrockClient.invoke to return empty string for all tests (force fallback logic)
         from app.bedrock import client as bedrock_client_mod
         self._original_invoke = bedrock_client_mod.BedrockClient.invoke
         def mock_invoke(self, prompt, max_tokens=1024, temperature=0.2):
-            # Return code with issues fixed for each test
-            if "secret123" in prompt or 'secret' in prompt:
-                return prompt.replace('"secret123"', 'System.getenv("PASSWORD")').replace('"secret"', 'System.getenv("PASSWORD")')
-            if "hardcoded-api-key" in prompt:
-                return prompt.replace('"hardcoded-api-key"', 'System.getenv("API_KEY")')
-            if "println(i)" in prompt:
-                return prompt.replace('println(i)', '// batched output')
-            if "Hello, World!" in prompt:
-                return prompt
-            return prompt
+            return ""  # Always return empty string to trigger fallback
         bedrock_client_mod.BedrockClient.invoke = mock_invoke
         # Create a fresh CodeReviewProject for each test
         self.project = CodeReviewProject()

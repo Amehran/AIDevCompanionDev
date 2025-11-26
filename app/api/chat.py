@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Query, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from app.core.exceptions import InvalidInput
 from starlette.concurrency import run_in_threadpool
 from app.core.di import get_settings, get_conversation_manager
@@ -30,7 +31,7 @@ async def chat(
 
     # Case 1: New conversation with code analysis
     if body.get_code() and not body.conversation_id:
-        return await _handle_new_analysis(body, conversation_manager, settings)
+        return await _handle_new_analysis(body, conversation_manager, settings, fast=fast)
     
 
     # Case 2: Continue existing conversation
