@@ -1,23 +1,11 @@
-FROM public.ecr.aws/lambda/python:3.11-arm64
-RUN yum groupinstall -y "Development Tools"
-# Set working directory inside the container
-WORKDIR /var/task
+FROM public.ecr.aws/lambda/python:3.11
 
-# Copy and install dependencies
-
-# We are assuming 'requirements-aws.txt' (which includes mangum) contains all Python dependencies
-COPY requirements-aws.txt .
-# FIX: Removed --platform and --only-binary flags to prevent conflict with modern pip versions.
-# Since we are already running on an ARM64 base image, pip will install the correct wheels.
+# Copy requirements and install dependencies
+COPY requirements-aws.txt ${LAMBDA_TASK_ROOT}
 RUN pip install --no-cache-dir -r requirements-aws.txt
 
+# Copy application code
+COPY . ${LAMBDA_TASK_ROOT}
 
-# Copy your application code (main.py, src/, app/, etc.)
-COPY . .
-
-# CRITICAL FIX: Command to run the FastAPI app using the Mangum handler.
-# This tells the Lambda runtime to use the 'mangum.handler' function, 
-# which will then look for the 'app' object in the 'main' module (main.py).
-# MANGUM_APPLICATION_PATH is the critical environment variable for Mangum.
-
+# Set the CMD to your handler
 CMD [ "main.handler" ]
