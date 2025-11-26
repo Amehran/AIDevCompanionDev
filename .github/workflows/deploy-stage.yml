@@ -1,4 +1,4 @@
-name: Deploy to AWS Lambda (Stage)
+name: Deploy to AWS Lambda (Container)
 
 on:
   push:
@@ -7,135 +7,53 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write  # Required for OIDC token
+  id-token: write
   contents: read
 
 jobs:
-  test:
-    name: Run Tests
-    runs-on: ubuntu-latest
-    env:
-      # Provide required settings for tests without real secrets
-      OPENAI_API_KEY: dummy
-      MODEL: gpt-4o-mini
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pytest pytest-asyncio httpx pydantic-settings
-          pip install -e .
-
-      - name: Run tests
-        run: |
-          python -m pytest -q
-
   deploy:
-    name: Build and Deploy to Lambda
-    needs: test
+    name: Build and Deploy
     runs-on: ubuntu-latest
     environment: staging
     env:
-      # Use repo secret if present, otherwise default to us-east-1
       AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+      ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY || vars.ECR_REPOSITORY }}
+      LAMBDA_FUNCTION_NAME: ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Validate required secrets
-        env:
-          ROLE_ARN: ${{ secrets.AWS_ROLE_ARN || vars.AWS_ROLE_ARN }}
-          LAMBDA_NAME: ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }}
-          OPENAI_SECRET: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          if [ -z "$ROLE_ARN" ]; then
-            echo "❌ Missing AWS role ARN. Set repository Secret 'AWS_ROLE_ARN' (preferred) or repository Variable 'AWS_ROLE_ARN'." >&2
-            exit 1
-          fi
-          if [ -z "$LAMBDA_NAME" ]; then
-            echo "❌ Missing Lambda function name. Set Secret or Variable 'LAMBDA_FUNCTION_NAME'." >&2
-            exit 1
-          fi
-          if [ -z "$OPENAI_SECRET" ]; then
-            echo "⚠️ OPENAI_API_KEY secret is not set; deployment will succeed but runtime will fail. Add repository Secret 'OPENAI_API_KEY'." >&2
-          fi
-
-      # Debug steps removed after validation; keeping workflow minimal and secure
-
-      - name: Configure AWS credentials via OIDC
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN || vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Verify assumed role identity
-        id: whoami
-        run: |
-          ARN=$(aws sts get-caller-identity --query 'Arn' --output text)
-          echo "assumed_role_arn=$ARN" >> $GITHUB_OUTPUT
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build Lambda deployment package
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          bash scripts/package_lambda.sh
-          ls -lh lambda_bundle.zip
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Deploy to Lambda
+      - name: Update Lambda Function
         run: |
           aws lambda update-function-code \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }} \
-            --zip-file fileb://lambda_bundle.zip \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+            --image-uri ${{ steps.build-image.outputs.image }} \
             --region ${{ env.AWS_REGION }}
 
       - name: Wait for update to complete
         run: |
           aws lambda wait function-updated \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }} \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
             --region ${{ env.AWS_REGION }}
 
-      - name: Update runtime configuration
-        run: |
-          aws lambda update-function-configuration \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }} \
-            --handler lambda_handler.handler \
-            --runtime python3.11 \
-            --timeout 25 \
-            --memory-size 256 \
-            --region ${{ env.AWS_REGION }}
-
-      - name: Wait for runtime config update
-        run: |
-          aws lambda wait function-updated \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }} \
-            --region ${{ env.AWS_REGION }}
-
-      - name: Update environment variables
-        run: |
-          aws lambda update-function-configuration \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }} \
-            --environment "Variables={
-              OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},
-              MODEL=${{ secrets.MODEL || vars.MODEL || 'gpt-4o-mini' }},
-              RATE_LIMIT_PER_MINUTE=${{ secrets.RATE_LIMIT_PER_MINUTE || vars.RATE_LIMIT_PER_MINUTE || '10' }},
-              MAX_CONCURRENT_JOBS=${{ secrets.MAX_CONCURRENT_JOBS || vars.MAX_CONCURRENT_JOBS || '100' }},
-              APP_COMMIT_SHA=${{ github.sha }}
-            }" \
-            --region ${{ env.AWS_REGION }}
-
-      - name: Deployment summary
-        run: |
-          echo "✅ Deployed to Lambda function: ${{ secrets.LAMBDA_FUNCTION_NAME || vars.LAMBDA_FUNCTION_NAME }}"
-          echo "📦 Artifact size: $(du -h lambda_bundle.zip | cut -f1)"
-          echo "🌍 Region: ${{ env.AWS_REGION }}"
-          echo "👤 Assumed role: ${{ steps.whoami.outputs.assumed_role_arn }}"
