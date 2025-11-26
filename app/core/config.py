@@ -8,13 +8,10 @@ from pydantic import Field
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
-    # OpenAI Configuration
-    openai_api_key: Optional[str] = Field(
-        default=None, 
-        description="OpenAI API key (optional; required for /chat?mode=full)"
-    )
-    model: str = Field(default="gpt-4o-mini", description="OpenAI model to use")
-    model_name: Optional[str] = Field(default=None, description="Alternative model name (legacy)")
+    # Bedrock Configuration
+    bedrock_api_key: Optional[str] = Field(default=None, description="AWS Bedrock API key (required)")
+    bedrock_region: Optional[str] = Field(default=None, description="AWS Bedrock region (required)")
+    model_id: Optional[str] = Field(default="anthropic.claude-3-sonnet-20240229-v1:0", description="Bedrock model ID")
     
     # Rate Limiting
     rate_limit_per_minute: int = Field(default=60, description="Rate limit for API requests per minute")

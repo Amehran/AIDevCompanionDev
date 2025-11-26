@@ -1,16 +1,14 @@
-"""Asynchronous job management service.
-
-Encapsulates storage and lifecycle of analysis jobs.
 """
-from __future__ import annotations
+Asynchronous job management service.
+Handles job submission, status, and result storage for code improvement tasks.
+"""
 
 import threading
 import time
-from typing import Dict, Any, Optional, Callable, Awaitable
 import uuid
+from typing import Any, Dict, Optional, Callable, Awaitable
 
 JobRecord = Dict[str, Any]
-
 class JobManager:
     def __init__(self) -> None:
         self._jobs: Dict[str, JobRecord] = {}
@@ -49,6 +47,15 @@ class JobManager:
         self.set_status(job_id, "running")
         try:
             result = await coro_factory()
+            # If result is None, treat as error
+            if result is None:
+                self.set_status(job_id, "error", error="No result returned from code review.", completed_at=time.time())
+                return
+            # If result contains an 'error' field, treat as error
+            if isinstance(result, dict) and result.get("error"):
+                self.set_status(job_id, "error", error=result.get("summary", "Bedrock error"), completed_at=time.time())
+                return
+            # If result is an empty dict, treat as success (no issues found)
             stored = result.model_dump() if hasattr(result, "model_dump") else result
             self.set_status(job_id, "done", result=stored, completed_at=time.time())
         except Exception as e:  # pragma: no cover - best-effort logging

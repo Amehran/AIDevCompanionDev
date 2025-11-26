@@ -8,16 +8,22 @@ The agent should generate fixed code based on detected issues.
 from src.crew import CodeReviewProject
 
 
+
 class TestCodeImproverAgent:
-    """Test suite for code improvement agent."""
-    
     def setup_method(self):
-        """Create a fresh CodeReviewProject for each test."""
+        # Patch BedrockClient.invoke to return empty string for all tests (force fallback logic)
+        from app.bedrock import client as bedrock_client_mod
+        self._original_invoke = bedrock_client_mod.BedrockClient.invoke
+        def mock_invoke(self, prompt, max_tokens=1024, temperature=0.2):
+            return ""  # Always return empty string to trigger fallback
+        bedrock_client_mod.BedrockClient.invoke = mock_invoke
+        # Create a fresh CodeReviewProject for each test
         self.project = CodeReviewProject()
-    
-    # ========================================================================
-    # Basic Code Improvement
-    # ========================================================================
+
+    def teardown_method(self):
+        # Restore original BedrockClient.invoke
+        from app.bedrock import client as bedrock_client_mod
+        bedrock_client_mod.BedrockClient.invoke = self._original_invoke
     
     def test_fix_hardcoded_credentials(self):
         """Should replace hardcoded credentials with environment variables."""

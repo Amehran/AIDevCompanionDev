@@ -1,6 +1,6 @@
 # AI Dev Companion Backend
 
-Production-ready FastAPI + CrewAI backend providing async code review with rate limiting, structured error handling, and clean architecture.
+Production-ready FastAPI backend providing async code review with AWS Bedrock integration, rate limiting, structured error handling, and clean architecture.
 
 ---
 
@@ -12,7 +12,7 @@ This project follows **Clean/Layered Architecture** with clear separation of con
 - **Service Layer** (`app/services/`): Business logic including `RateLimiter` (per-IP fixed window) and `JobManager` (async task orchestration).
 - **API Layer** (`app/api/`): FastAPI routers for health, chat, and job endpoints.
 - **Core** (`app/core/`): Configuration (Pydantic Settings), DI singletons, custom exceptions, and global error handlers.
-- **CrewAI Integration** (`src/crew.py`): Multi-agent code review workflow with Android/Kotlin focus. Provides stub behavior when dependencies unavailable (test/dev).
+- **Bedrock Integration** (`app/bedrock/client.py`): AWS Bedrock client for LLM-powered code review and improvement.
 
 **Dependency Injection**: Services instantiated as singletons in `app/core/di.py` and injected at startup (see `main.py`).
 
@@ -29,7 +29,7 @@ ai-dev-companion-backend/
 │   ├── domain/           # Pydantic models (ChatRequest, ChatResponse, etc.)
 │   └── services/         # RateLimiter, JobManager
 ├── src/
-│   └── crew.py           # CrewAI agents and tasks (with fallback stubs)
+│   └── crew.py           # Code review orchestration (Bedrock-only)
 ├── tests/
 │   ├── test_api.py       # API integration tests (17 scenarios)
 │   └── test_services.py  # Service unit tests (RateLimiter, JobManager)
@@ -68,15 +68,17 @@ ai-dev-companion-backend/
    pip install -e ".[dev]"   # for tests
    ```
 
+
 4. **Configure environment variables:**
-   ```bash
-   cp .env.example .env
-   # Edit .env and set OPENAI_API_KEY, optionally other keys
-   ```
+  ```bash
+  cp .env.example .env
+  # Edit .env and set BEDROCK_API_KEY, BEDROCK_REGION, and optionally MODEL_ID
+  ```
 
 ### Required Environment Variables
-- `OPENAI_API_KEY` (required): Your OpenAI API key. Use `"dummy"` or `"test"` to trigger stub responses for local testing.
-- `MODEL` (optional, default: `gpt-4o-mini`): LLM model name.
+- `BEDROCK_API_KEY` (required): Your AWS Bedrock API key.
+- `BEDROCK_REGION` (required): AWS region for Bedrock.
+- `MODEL_ID` (optional, default: `anthropic.claude-3-sonnet-20240229-v1:0`): Bedrock model ID.
 - `RATE_LIMIT_PER_MINUTE` (optional, default: `10`): Max requests per IP per minute.
 - `MAX_CONCURRENT_JOBS` (optional, default: `100`): Server concurrency guard.
 
@@ -110,8 +112,7 @@ docker run -p 8000:8000 --env-file .env ai-dev-companion
 - `POST /echo` – Echo payload for client debugging
 
 ### Chat (Synchronous)
-- `POST /chat?fast=true` – Fast stub response (no LLM)
-- `POST /chat` – Full code review (blocks until complete)
+- `POST /chat` – Full code review (blocks until complete, powered by AWS Bedrock)
   - **Body:** `{"source_code": "...", "code_snippet": "..."}`
   - **Response:** `{"summary": "...", "issues": [...]}`
 
@@ -140,17 +141,17 @@ pytest -m "not slow"        # Skip long-running tests
   - RateLimiter: window reset, limit enforcement, cleanup.
   - JobManager: lifecycle (queued → running → done/error), cleanup, async execution.
 
-### Test Mode
-When `OPENAI_API_KEY` is set to `"dummy"`, `"test"`, or `"placeholder"`, the backend returns deterministic stub responses without invoking external LLMs. This ensures fast, reliable CI/CD tests.
+
 
 ---
 
 ## AWS Lambda (Stage 1)
 
+
 This repo is ready to run on AWS Lambda behind an HTTP API using Mangum.
 
 - Lambda entrypoint: `lambda_handler.py` exposes `handler = Mangum(app)`.
-- Minimal runtime deps: `requirements-aws.txt` includes only FastAPI + Mangum (transitives resolved automatically). Heavy, optional packages like CrewAI/ChromaDB are intentionally excluded; the app uses test-safe stubs when those imports are unavailable.
+- Minimal runtime deps: `requirements-aws.txt` includes only FastAPI + Mangum (transitives resolved automatically). Optional legacy packages are excluded; the app uses AWS Bedrock for all LLM operations.
 - Packaging script: `scripts/package_lambda.sh` builds a slim zip with site-packages + app code.
 
 ### Build the artifact locally
@@ -182,7 +183,7 @@ Automated deployment pipeline for the `stage` branch using GitHub OIDC (no API k
 **Quick start:**
 1. Create IAM role with GitHub OIDC trust policy
 2. Create Lambda function (Python 3.11)
-3. Add GitHub secrets: `AWS_ROLE_ARN`, `AWS_REGION`, `LAMBDA_FUNCTION_NAME`, `OPENAI_API_KEY`
+3. Add GitHub secrets: `AWS_ROLE_ARN`, `AWS_REGION`, `LAMBDA_FUNCTION_NAME`, `BEDROCK_API_KEY`, `BEDROCK_REGION`, `MODEL_ID`
 4. Push to `stage` branch → deployment triggers automatically
 
 **Workflow file:** `.github/workflows/deploy-stage.yml`
@@ -235,20 +236,7 @@ Provides singleton instances:
 
 ---
 
-## CrewAI Integration
 
-### Agents
-1. **Code Reviewer Agent**: Senior Android analyst (Kotlin, Jetpack Compose, MVVM).
-2. **JSON Formatter Agent**: Ensures strict JSON output.
-
-### Tasks
-1. **Code Review Task**: Analyze source → produce structured findings.
-2. **JSON Formatter Task**: Validate/normalize JSON schema.
-
-### Fallback Behavior
-If `crewai` imports fail (e.g., test env without ChromaDB), `src/crew.py` provides stub classes with deterministic JSON responses (`{"summary": "OK (stub)", "issues": []}`).
-
----
 
 ## Future Improvements
 

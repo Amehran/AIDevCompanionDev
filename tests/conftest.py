@@ -8,8 +8,9 @@ import httpx
 import os
 
 # Set test environment variables before any imports
-os.environ.setdefault("OPENAI_API_KEY", "test-key-placeholder")
-os.environ.setdefault("MODEL_NAME", "gpt-4o-mini")
+os.environ.setdefault("BEDROCK_API_KEY", "test-bedrock-key")
+os.environ.setdefault("BEDROCK_REGION", "us-east-1")
+os.environ.setdefault("MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")
 
 
 class TestClient:
@@ -41,8 +42,9 @@ class TestClient:
 def reset_state(monkeypatch):
     """Reset global state before each test."""
     # Set test environment variables
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key-placeholder")
-    monkeypatch.setenv("MODEL_NAME", "gpt-4o-mini")
+    monkeypatch.setenv("BEDROCK_API_KEY", "test-bedrock-key")
+    monkeypatch.setenv("BEDROCK_REGION", "us-east-1")
+    monkeypatch.setenv("MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")
     
     from app.core.config import settings as _settings
     from app.core import di
