@@ -28,14 +28,15 @@ class BedrockClient:
                 accept="application/json",
                 body=json.dumps(body)
             )
-            # The response is a stream of events; we need to concatenate the 'contentBlock' events
+            # Parse streaming response correctly
             completion = ""
             for event in response_stream["body"]:
-                if "chunk" in event:
-                    chunk = event["chunk"]
-                    chunk_obj = json.loads(chunk["bytes"].decode())
-                    if "contentBlock" in chunk_obj:
-                        completion += chunk_obj["contentBlock"]["text"]
+                chunk = json.loads(event["chunk"]["bytes"])
+                
+                if chunk["type"] == "content_block_delta":
+                    if "delta" in chunk:
+                        completion += chunk["delta"].get("text", "")
+                        
             return completion
         except Exception as e:
             logger.error(f"Bedrock invocation failed: {e}")
