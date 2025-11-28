@@ -164,33 +164,44 @@ async def _handle_conversation_continuation(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
     
-    # Require either message or new code
-    if not body.message and not body.get_code():
-        raise InvalidInput("Provide 'message' or 'source_code' for conversation continuation")
-    
-    # If new code provided, restart analysis in same conversation
-    if body.get_code():
-        return await _handle_new_code_in_conversation(body, conv_id, conversation_manager, settings)
-    
-    # Handle user message
-    user_message = body.message or ""
-    if not user_message.strip():
-        raise InvalidInput("Message cannot be empty")
+    user_message = body.message
     
     # Store user message
-    conversation_manager.add_message(
-        conv_id,
-        role="user",
-        content=user_message
-    )
+    conversation_manager.add_message(conv_id, role="user", content=user_message)
     
-    # Determine user intent
-    if body.apply_improvements:
-        return await _handle_apply_improvements(conv_id, user_message, conversation_manager, settings)
-    elif body.apply_improvements is False:
+    # Detect intent from message text if flags aren't set
+    intent_apply = body.apply_improvements
+    intent_decline = False
+    
+    if user_message:
+        msg_lower = user_message.lower()
+        if "apply" in msg_lower and "improvement" in msg_lower:
+            intent_apply = True
+        elif "fix" in msg_lower and "issue" in msg_lower:
+            intent_apply = True
+        elif "decline" in msg_lower or "no thanks" in msg_lower:
+            intent_decline = True
+
+    # 1. Apply improvements if requested
+    if intent_apply:
+        return await _handle_apply_improvements(
+            conv_id, 
+            user_message,
+            conversation_manager, 
+            settings
+        )
+    
+    # 2. Decline improvements
+    if intent_decline:
         return _handle_decline_improvements(conv_id, conversation_manager)
-    else:
-        return await _handle_general_question(conv_id, user_message, conversation_manager, settings)
+    
+    # 3. Otherwise, treat as general question/explanation
+    return await _handle_general_question(
+        conv_id,
+        user_message,
+        conversation_manager,
+        settings
+    )
 
 
 async def _handle_apply_improvements(
