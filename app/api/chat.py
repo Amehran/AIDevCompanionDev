@@ -241,7 +241,9 @@ async def _handle_apply_improvements(
     ]
     
     # Generate improved code
-    improved_code = project.improve_code(
+    from starlette.concurrency import run_in_threadpool
+    improved_code = await run_in_threadpool(
+        project.improve_code,
         source_code=original_code,
         issues=issues_dicts,
         fix_types=fix_types
