@@ -13,7 +13,7 @@ os.environ.setdefault("BEDROCK_REGION", "us-east-1")
 os.environ.setdefault("MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")
 
 
-class TestClient:
+class AsyncTestClientWrapper:
     """Sync wrapper around httpx.AsyncClient+ASGITransport for compatibility."""
     def __init__(self, app, base_url: str = "http://testserver") -> None:
         self.app = app
@@ -90,4 +90,4 @@ def reset_state(monkeypatch):
 def client():
     """FastAPI test client fixture."""
     from main import app
-    return TestClient(app)
+    return AsyncTestClientWrapper(app)

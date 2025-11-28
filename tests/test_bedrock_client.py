@@ -4,7 +4,7 @@ import boto3
 from botocore.stub import Stubber
 import json
 import io
-
+from unittest.mock import MagicMock
 @pytest.fixture
 def bedrock_stub():
     client = boto3.client("bedrock-runtime")
@@ -13,36 +13,30 @@ def bedrock_stub():
     stubber.deactivate()
 
 
-def test_bedrock_invoke_success(monkeypatch, bedrock_stub):
-    client, stubber = bedrock_stub
-    # Prepare mock streaming response for invoke_model_with_response_stream
+def test_bedrock_invoke_success(monkeypatch):
+    # Mock boto3 client directly
+    mock_client = MagicMock()
+    
     expected_completion = "This is a test completion."
-    # Simulate the streaming response structure as an iterable of event dicts
-    # The stub expects 'body' to be a dict, not a list
-    streaming_body = {
+    
+    # Mock response stream
+    # The client iterates over response['body']
+    # Each item in body is an event dict
+    event = {
         "chunk": {
-            "bytes": json.dumps({"contentBlock": {"text": expected_completion}}).encode()
+            "bytes": json.dumps({
+                "type": "content_block_delta",
+                "delta": {"text": expected_completion}
+            }).encode()
         }
     }
-    stubber.add_response(
-        "invoke_model_with_response_stream",
-        {"body": streaming_body, "contentType": "application/json"},
-        {
-            "modelId": "anthropic.claude-3-sonnet-20240229-v1:0",
-            "contentType": "application/json",
-            "accept": "application/json",
-            "body": json.dumps({
-                "messages": [{"role": "user", "content": "test"}],
-                "max_tokens": 1024,
-                "temperature": 0.2,
-                "anthropic_version": "bedrock-2023-05-31"
-            })
-        }
-    )
-    stubber.activate()
+    
+    mock_client.invoke_model_with_response_stream.return_value = {
+        "body": [event]
+    }
 
-    # Patch boto3 client in BedrockClient to use stub
-    monkeypatch.setattr("boto3.client", lambda service: client)
+    monkeypatch.setattr("boto3.client", lambda service: mock_client)
+    
     bedrock = BedrockClient()
     result = bedrock.invoke("test")
     assert result == expected_completion

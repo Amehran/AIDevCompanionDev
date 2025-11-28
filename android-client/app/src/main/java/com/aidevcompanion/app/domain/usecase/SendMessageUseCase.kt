@@ -5,6 +5,10 @@ import com.aidevcompanion.app.domain.repository.ChatRepository
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
+/**
+ * Use case for sending a message to the chat API.
+ * Encapsulates the logic for interacting with the [ChatRepository].
+ */
 class SendMessageUseCase @Inject constructor(
     private val repository: ChatRepository
 ) {

@@ -13,6 +13,7 @@
 - **Multi-Agent Analysis**: Specialized AI agents for syntax, security, and performance
 - **Serverless Architecture**: AWS Lambda with container images (scales to 1000+ concurrent requests)
 - **Conversation Memory**: Multi-turn conversations with context retention
+- **Android Client**: Native Jetpack Compose application for mobile access
 - **Real-time Streaming**: Bedrock streaming API for responsive UX
 - **Production-Ready**: Error handling, rate limiting, structured logging, CI/CD
 
@@ -21,6 +22,7 @@
 - **[Architecture & Design](./ARCHITECTURE.md)** - Deep dive into system design, patterns, and technical decisions
 - **[API Documentation](#api-reference)** - Endpoint specifications
 - **[Deployment Guide](#deployment)** - AWS setup and GitHub Actions workflow
+- **[Android Client](./android-client/README.md)** - Mobile application documentation
 
 ---
 

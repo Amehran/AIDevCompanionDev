@@ -1,7 +1,6 @@
 
 import pytest
 from main import app
-from tests.conftest import TestClient
 
 # =========================
 # Basic Endpoint Tests

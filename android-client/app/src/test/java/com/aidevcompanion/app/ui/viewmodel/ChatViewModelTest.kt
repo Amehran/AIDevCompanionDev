@@ -27,15 +27,20 @@ class ChatViewModelTest {
 
     private val sendMessageUseCase: SendMessageUseCase = mockk()
     private val checkHealthUseCase: CheckHealthUseCase = mockk()
+    private val conversationDao: com.aidevcompanion.app.data.local.ConversationDao = mockk(relaxed = true)
     private lateinit var viewModel: ChatViewModel
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        io.mockk.mockkStatic(android.util.Log::class)
+        every { android.util.Log.d(any(), any()) } returns 0
+        every { android.util.Log.e(any(), any(), any()) } returns 0
+        
         // Default behavior for init block
         coEvery { checkHealthUseCase() } returns true
-        viewModel = ChatViewModel(sendMessageUseCase, checkHealthUseCase)
+        viewModel = ChatViewModel(sendMessageUseCase, checkHealthUseCase, conversationDao)
     }
 
     @After
@@ -84,6 +89,9 @@ class ChatViewModelTest {
             assertEquals(2, successState.messages.size)
             assertEquals(aiResponse, successState.messages.last().content)
             assertEquals("new_id", successState.conversationId)
+            
+            // Verify DB insertion
+            io.mockk.coVerify(exactly = 1) { conversationDao.insertConversation(any()) }
         }
     }
 

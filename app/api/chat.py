@@ -33,8 +33,11 @@ async def chat(
     if body.get_code() and not body.conversation_id:
         return await _handle_new_analysis(body, conversation_manager, settings, fast=fast)
     
+    # Case 2: New code in existing conversation
+    if body.get_code() and body.conversation_id:
+        return await _handle_new_code_in_conversation(body, body.conversation_id, conversation_manager, settings)
 
-    # Case 2: Continue existing conversation
+    # Case 3: Continue existing conversation
     if body.conversation_id:
         return await _handle_conversation_continuation(body, conversation_manager, settings)
     
@@ -169,6 +172,11 @@ async def _handle_conversation_continuation(
     # Store user message
     conversation_manager.add_message(conv_id, role="user", content=user_message)
     
+    if not user_message or not user_message.strip():
+        # If message is empty and no specific action requested (like apply_improvements flag), raise error
+        if not body.apply_improvements:
+             raise InvalidInput("Message cannot be empty")
+    
     # Detect intent from message text if flags aren't set
     intent_apply = body.apply_improvements
     intent_decline = False
@@ -227,7 +235,7 @@ async def _handle_apply_improvements(
     
     # Use code improver agent to generate fixed code
     project = CodeReviewProject()
-    original_code = conversation.state.original_code or ""
+    original_code = conversation.state.current_code or conversation.state.original_code or ""
     issues = conversation.state.detected_issues or []
     
     # Convert Issue objects to dicts for improve_code method
@@ -386,105 +394,4 @@ async def _handle_new_code_in_conversation(
     return result
 
 
-    if body.conversation_id:
-        conversation = conversation_manager.get_conversation(body.conversation_id)
-        if not conversation:
-            raise HTTPException(status_code=404, detail="Conversation not found")
-        
-        # Handle new code submission in existing conversation
-        if body.get_code():
-            # Re-analyze new code
-            new_code = body.get_code()
-            test_issues = []
-            
-            if "password" in new_code.lower() or "secret" in new_code.lower():
-                test_issues.append(
-                    Issue(
-                        type="SECURITY",
-                        description="Hardcoded credentials detected",
-                        suggestion="Use environment variables or secure vault"
-                    )
-                )
-            
-            if "for" in new_code.lower() and "println" in new_code.lower():
-                test_issues.append(
-                    Issue(
-                        type="PERFORMANCE",
-                        description="Inefficient loop with I/O operations",
-                        suggestion="Use bulk operations or optimize I/O"
-                    )
-                )
-            
-            # Update conversation state with new code
-            conversation_manager.update_state(
-                body.conversation_id,
-                ConversationState(
-                    original_code=new_code,
-                    current_code=new_code,
-                    detected_issues=test_issues,
-                    pending_issues=[i.type for i in test_issues if i.type],
-                    awaiting_decision=len(test_issues) > 0
-                )
-            )
-            
-            return ChatResponse(
-                summary="Analysis of new code (test mode)",
-                issues=test_issues,
-                conversation_id=body.conversation_id,
-                awaiting_user_input=len(test_issues) > 0,
-                suggested_actions=["Apply fixes", "Explain issues"] if test_issues else None
-            )
-        
-        if body.apply_improvements:
-            # Return improved code (remove hardcoded secrets)
-            original = conversation.state.original_code or ""
-            improved = original.replace("secret123", "os.getenv('PASSWORD')")
-            improved = improved.replace('"secret"', 'os.getenv("PASSWORD")')
-            
-            return ChatResponse(
-                summary="Improvements applied (test mode)",
-                conversation_id=body.conversation_id,
-                improved_code=improved,
-                awaiting_user_input=False
-            )
-        
-        # Handle questions/explanations in test mode
-        if body.message is not None:
-            user_msg = body.message
-            
-            # Validate non-empty message
-            if not user_msg.strip():
-                raise InvalidInput("Message cannot be empty")
-            
-            user_msg_lower = user_msg.lower()
-            explanation = "OK (test mode continuation)"
-            
-            # Provide meaningful explanations for test assertions
-            if "why" in user_msg_lower or "explain" in user_msg_lower:
-                if "performance" in user_msg_lower:
-                    explanation = ("The performance issue occurs because you're using a loop with "
-                                 "I/O operations (println) which blocks execution. This creates O(n) "
-                                 "I/O overhead. Consider batching output or using asynchronous I/O.")
-                elif "security" in user_msg_lower:
-                    explanation = ("The security issue is caused by hardcoded credentials in the source code. "
-                                 "This exposes sensitive data in version control and compiled binaries. "
-                                 "Use environment variables, configuration files, or secure vaults instead.")
-                else:
-                    explanation = ("Based on the code analysis, the detected issues relate to common "
-                                 "anti-patterns that can impact security, performance, and maintainability. "
-                                 "Each issue includes specific suggestions for remediation.")
-            
-            return ChatResponse(
-                summary=explanation,
-                conversation_id=body.conversation_id,
-                awaiting_user_input=False
-            )
-        
-        return ChatResponse(
-            summary="OK (test mode continuation)",
-            conversation_id=body.conversation_id,
-            awaiting_user_input=False
-        )
-    
-    # No valid input provided - should fail validation
-    raise InvalidInput("Provide 'source_code' or 'conversation_id' with 'message'.")
+

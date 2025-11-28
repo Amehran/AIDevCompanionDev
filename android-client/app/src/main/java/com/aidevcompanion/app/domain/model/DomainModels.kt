@@ -1,5 +1,9 @@
 package com.aidevcompanion.app.domain.model
 
+/**
+ * Represents a single message in the chat conversation.
+ * Can be a user message or an AI response.
+ */
 data class ChatMessage(
     val id: String = java.util.UUID.randomUUID().toString(),
     val content: String,

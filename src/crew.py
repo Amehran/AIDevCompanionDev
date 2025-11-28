@@ -100,22 +100,28 @@ class CodeReviewProject:
             # If Bedrock returns nothing, apply minimal local fixes for critical issues
             improved_code = source_code
             import re
-            if language.lower() == "kotlin" and issues:
+            if issues:
                 # Determine which types to fix
                 types_to_fix = set(fix_types) if fix_types else set(issue.get("type") for issue in issues if issue.get("type"))
+                
                 for issue in issues:
                     issue_type = issue.get("type")
                     desc = issue.get("description", "").lower()
-                    # SECURITY: Remove hardcoded credentials only if requested
+                    
+                    # SECURITY: Remove hardcoded credentials
                     if issue_type == "SECURITY" and "hardcoded" in desc and (not fix_types or "SECURITY" in types_to_fix):
-                        # Replace password
-                        improved_code = re.sub(r'(val\s+password\s*=\s*")[^"]+("\s*)', r'\1System.getenv("PASSWORD")\2', improved_code)
-                        # Replace apiKey
-                        improved_code = re.sub(r'(val\s+apiKey\s*=\s*")[^"]+("\s*)', r'\1System.getenv("API_KEY")\2', improved_code)
-                    # PERFORMANCE: Remove println in loop only if requested
+                        if language.lower() == "kotlin":
+                            improved_code = re.sub(r'(val\s+password\s*=\s*)"[^"]+"(\s*)', r'\1System.getenv("PASSWORD")\2', improved_code)
+                            improved_code = re.sub(r'(val\s+apiKey\s*=\s*)"[^"]+"(\s*)', r'\1System.getenv("API_KEY")\2', improved_code)
+                        elif language.lower() == "python":
+                            improved_code = re.sub(r'(password\s*=\s*)"[^"]+"(\s*)', r'\1os.getenv("PASSWORD")\2', improved_code)
+                        elif language.lower() == "java":
+                            improved_code = re.sub(r'(String\s+password\s*=\s*)"[^"]+"(\s*)', r'\1System.getenv("PASSWORD")\2', improved_code)
+
+                    # PERFORMANCE: Remove println in loop
                     if issue_type == "PERFORMANCE" and "loop" in desc and (not fix_types or "PERFORMANCE" in types_to_fix):
-                        # Replace println in for loop with comment
-                        improved_code = re.sub(r'for\s*\([^)]*\)\s*\{[^}]*println\([^)]*\)[^}]*\}', r'// Optimized loop (println removed)', improved_code, flags=re.DOTALL)
+                        if language.lower() == "kotlin":
+                            improved_code = re.sub(r'for\s*\([^)]*\)\s*\{[^}]*println\([^)]*\)[^}]*\}', r'// Optimized loop (println removed)', improved_code, flags=re.DOTALL)
             return improved_code
         return response
     

@@ -25,7 +25,7 @@ class SendMessageUseCaseTest {
         val expectedResult = Result.success(
             ChatResult(
                 conversationId = "123",
-                message = ChatMessage("Hi", false)
+                message = ChatMessage(content = "Hi", isUser = false)
             )
         )
         every { repository.sendMessage(conversationId, message, sourceCode) } returns flowOf(expectedResult)

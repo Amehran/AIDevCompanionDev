@@ -1,18 +1,14 @@
 import pytest
 import asyncio
-from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from main import app
-
-client = TestClient(app)
 
 @pytest.fixture
 def mock_swarm():
     with patch("app.services.agents.KotlinAnalysisSwarm") as MockSwarm:
         instance = MockSwarm.return_value
         # Configure analyze to be awaitable
-        future = asyncio.Future()
-        future.set_result({
+        instance.analyze = AsyncMock(return_value={
             "summary": "Integration Test Summary",
             "issues": [
                 {
@@ -22,10 +18,9 @@ def mock_swarm():
                 }
             ]
         })
-        instance.analyze.return_value = future
         yield instance
 
-def test_chat_endpoint_success(mock_swarm):
+def test_chat_endpoint_success(client, mock_swarm):
     response = client.post("/chat", json={"source_code": "fun main() {}"})
     assert response.status_code == 200
     data = response.json()
@@ -34,13 +29,13 @@ def test_chat_endpoint_success(mock_swarm):
     assert data["issues"][0]["type"] == "SECURITY"
     assert "conversation_id" in data
 
-def test_chat_endpoint_fast_mode():
+def test_chat_endpoint_fast_mode(client):
     response = client.post("/chat?fast=true", json={"source_code": "fun main() {}"})
     assert response.status_code == 200
     data = response.json()
     assert data["summary"] == "OK (fast mode)"
     assert data["issues"] == []
 
-def test_chat_endpoint_invalid_input():
+def test_chat_endpoint_invalid_input(client):
     response = client.post("/chat", json={})
     assert response.status_code == 400  # InvalidInput raises 400

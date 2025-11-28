@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.aidevcompanion.app.domain.model.ChatMessage
 import com.aidevcompanion.app.domain.usecase.CheckHealthUseCase
 import com.aidevcompanion.app.domain.usecase.SendMessageUseCase
+import com.aidevcompanion.app.data.mapper.toConversationEntity
+import com.aidevcompanion.app.data.mapper.toUiMessages
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +24,10 @@ data class ChatUiState(
     val conversationId: String? = null
 )
 
+/**
+ * ViewModel for the Chat screen.
+ * Handles user interactions, manages chat state, and coordinates with use cases and repositories.
+ */
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val sendMessageUseCase: SendMessageUseCase,
@@ -47,6 +53,11 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Sends a message to the AI assistant.
+     * Automatically detects if the message is code or text.
+     * Updates the UI state with the user's message immediately, then launches a coroutine to fetch the response.
+     */
     fun sendMessage(text: String) {
         android.util.Log.d("ChatViewModel", "sendMessage called with text: $text")
 
@@ -84,7 +95,7 @@ class ChatViewModel @Inject constructor(
                     saveConversationLocally()
                 }.onFailure { error ->
                     android.util.Log.e("ChatViewModel", "UseCase failure: ${error.message}", error)
-                    _uiState.update { it.copy(isLoading = false) }
+                    _uiState.update { it.copy(isLoading = false, error = error.localizedMessage) }
                     _uiEvent.send(error.localizedMessage ?: "Unknown error")
                 }
             }
@@ -109,30 +120,9 @@ class ChatViewModel @Inject constructor(
     
     private suspend fun saveConversationLocally() {
         val currentState = _uiState.value
-        if (currentState.conversationId != null) {
-            val entity = com.aidevcompanion.app.data.local.ConversationEntity(
-                id = currentState.conversationId,
-                originalCode = currentState.messages.firstOrNull { it.isCode && it.isUser }?.content,
-                detectedIssues = currentState.messages
-                    .firstOrNull { !it.isUser && it.issues != null }
-                    ?.issues
-                    ?.map { 
-                        com.aidevcompanion.app.data.local.IssueEntity(
-                            type = it.type,
-                            description = it.description,
-                            suggestion = it.suggestion
-                        )
-                    },
-                messages = currentState.messages.map {
-                    com.aidevcompanion.app.data.local.MessageEntity(
-                        role = if (it.isUser) "user" else "assistant",
-                        content = it.content,
-                        isCode = it.isCode
-                    )
-                },
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis()
-            )
+        val entity = currentState.toConversationEntity()
+        
+        if (entity != null) {
             conversationDao.insertConversation(entity)
             android.util.Log.d("ChatViewModel", "Saved conversation ${currentState.conversationId} locally")
         }
@@ -141,15 +131,7 @@ class ChatViewModel @Inject constructor(
     suspend fun loadConversation(conversationId: String) {
         val entity = conversationDao.getConversation(conversationId)
         if (entity != null) {
-            val messages = entity.messages.map {
-                ChatMessage(
-                    content = it.content,
-                    isUser = it.role == "user",
-                    isCode = it.isCode,
-                    issues = null, // Issues are on the AI response
-                    suggestedActions = null
-                )
-            }
+            val messages = entity.toUiMessages()
             _uiState.update {
                 it.copy(
                     conversationId = entity.id,

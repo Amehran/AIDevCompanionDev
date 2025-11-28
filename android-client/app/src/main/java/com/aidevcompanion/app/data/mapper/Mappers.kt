@@ -8,13 +8,13 @@ import com.aidevcompanion.app.domain.model.IssueDomain
 
 fun ChatResponse.toDomain(): ChatResult {
     return ChatResult(
-        conversationId = this.conversation_id,
+        conversationId = this.conversationId,
         message = ChatMessage(
-            content = this.improved_code ?: this.summary ?: "No response",
+            content = this.improvedCode ?: this.summary ?: "No response",
             isUser = false,
-            isCode = this.improved_code != null,
+            isCode = this.improvedCode != null,
             issues = this.issues?.map { it.toDomain() },
-            suggestedActions = this.suggested_actions
+            suggestedActions = this.suggestedActions
         )
     )
 }

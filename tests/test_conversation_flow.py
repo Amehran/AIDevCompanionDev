@@ -7,6 +7,57 @@ Following TDD: These tests define the expected multi-turn conversation behavior.
 from fastapi.testclient import TestClient
 
 
+from unittest.mock import patch, MagicMock
+import json
+import pytest
+
+@pytest.fixture(autouse=True)
+def mock_bedrock():
+    with patch("app.bedrock.client.boto3.client") as mock_boto:
+        mock_client = MagicMock()
+        mock_boto.return_value = mock_client
+        
+        # Mock invoke_model_with_response_stream
+        def side_effect(*args, **kwargs):
+            body_str = kwargs.get("body", "{}")
+            body_json = json.loads(body_str)
+            
+            # Default response
+            response_text = ""
+            
+            # Check if it's an analysis request (contains "Analyze the following")
+            if "Analyze" in body_json.get("messages", [{}])[0].get("content", ""):
+                response_text = json.dumps({
+                    "summary": "Analysis complete",
+                    "issues": [
+                        {
+                            "type": "SECURITY",
+                            "description": "Hardcoded credentials detected",
+                            "suggestion": "Use environment variables"
+                        }
+                    ]
+                })
+            # Check if it's an improvement request (contains "Generate improved code")
+            elif "Generate improved code" in body_json.get("messages", [{}])[0].get("content", ""):
+                # Return empty string to trigger fallback logic in CodeReviewProject
+                response_text = ""
+            else:
+                response_text = "Generic response"
+                
+            # Create event stream
+            event = {
+                "chunk": {
+                    "bytes": json.dumps({
+                        "type": "content_block_delta",
+                        "delta": {"text": response_text}
+                    }).encode()
+                }
+            }
+            return {"body": [event]}
+            
+        mock_client.invoke_model_with_response_stream.side_effect = side_effect
+        yield mock_client
+
 class TestConversationFlow:
     """Test multi-turn conversational interactions."""
     

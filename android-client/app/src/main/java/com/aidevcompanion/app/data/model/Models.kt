@@ -1,19 +1,21 @@
 package com.aidevcompanion.app.data.model
 
+import com.google.gson.annotations.SerializedName
+
 data class ChatRequest(
-    val source_code: String? = null,
-    val conversation_id: String? = null,
+    @SerializedName("source_code") val sourceCode: String? = null,
+    @SerializedName("conversation_id") val conversationId: String? = null,
     val message: String? = null,
-    val apply_improvements: Boolean? = null
+    @SerializedName("apply_improvements") val applyImprovements: Boolean? = null
 )
 
 data class ChatResponse(
-    val conversation_id: String,
+    @SerializedName("conversation_id") val conversationId: String,
     val summary: String?,
     val issues: List<Issue>?,
-    val improved_code: String?,
-    val awaiting_user_input: Boolean,
-    val suggested_actions: List<String>?
+    @SerializedName("improved_code") val improvedCode: String?,
+    @SerializedName("awaiting_user_input") val awaitingUserInput: Boolean,
+    @SerializedName("suggested_actions") val suggestedActions: List<String>?
 )
 
 data class Issue(
