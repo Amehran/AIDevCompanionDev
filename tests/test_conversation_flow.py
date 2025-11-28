@@ -34,13 +34,21 @@ def mock_bedrock():
                             "type": "SECURITY",
                             "description": "Hardcoded credentials detected",
                             "suggestion": "Use environment variables"
+                        },
+                        {
+                            "type": "PERFORMANCE",
+                            "description": "Inefficient loop detected",
+                            "suggestion": "Optimize loop"
                         }
                     ]
                 })
             # Check if it's an improvement request (contains "Generate improved code")
             elif "Generate improved code" in body_json.get("messages", [{}])[0].get("content", ""):
                 # Return empty string to trigger fallback logic in CodeReviewProject
+                # The fallback logic in CodeReviewProject uses regex to replace "secret" with env var
                 response_text = ""
+            elif "Why is this a performance issue?" in body_json.get("messages", [{}])[0].get("content", ""):
+                response_text = "This is a performance issue because looping 1 million times with I/O is slow. " * 2
             else:
                 response_text = "Generic response"
                 

@@ -30,6 +30,9 @@ jobs:
           pip install boto3 pytest pytest-asyncio pytest-cov httpx
 
       - name: Run Backend Tests
+        env:
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_REGION: us-east-1
         run: |
           pytest --cov=app tests/
 
