@@ -306,13 +306,31 @@ async def _handle_general_question(
     conversation_manager,
     settings
 ) -> ChatResponse:
-    """Handle explanations or general questions about the code."""
-    # Get conversation context if needed in future
+    """Handle explanations or general questions about the code using AI."""
+    # Get conversation context
+    conversation = conversation_manager.get_conversation(conv_id)
     
-    # For now, return a simple response
-    # This will be enhanced when we add conversational AI agent
-    response_summary = f"Regarding your question: '{user_message}' - This will be handled by the conversational agent."
+    # Build context for the AI
+    context = {
+        "original_code": conversation.state.original_code if conversation.state else None,
+        "detected_issues": conversation.state.detected_issues if conversation.state else [],
+        "conversation_history": conversation.messages if conversation else []
+    }
     
+    # Use Bedrock to generate contextual response
+    try:
+        from app.bedrock.client import BedrockClient
+        bedrock = BedrockClient()
+        
+        response_summary = await bedrock.chat(
+            user_message=user_message,
+            context=context
+        )
+    except Exception as e:
+        logger.error(f"Failed to generate AI response: {e}")
+        response_summary = "I apologize, but I'm having trouble processing your question right now. Could you please rephrase it or ask something else?"
+    
+    # Store assistant response
     conversation_manager.add_message(
         conv_id,
         role="assistant",

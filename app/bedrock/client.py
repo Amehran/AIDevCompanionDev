@@ -1,7 +1,7 @@
 import boto3
 import json
 import logging
-from typing import Optional
+from typing import Optional, Dict, Any, List
 
 logger = logging.getLogger(__name__)
 
@@ -41,3 +41,67 @@ class BedrockClient:
         except Exception as e:
             logger.error(f"Bedrock invocation failed: {e}")
             raise
+
+    async def chat(
+        self, 
+        user_message: str, 
+        context: Optional[Dict[str, Any]] = None,
+        max_tokens: int = 2048,
+        temperature: float = 0.7
+    ) -> str:
+        """
+        Handle conversational chat with context awareness.
+        
+        Args:
+            user_message: The user's question or message
+            context: Optional context including code, issues, and conversation history
+            max_tokens: Maximum tokens for response
+            temperature: Temperature for response generation (higher = more creative)
+            
+        Returns:
+            AI-generated response
+        """
+        # Build context-aware prompt
+        system_prompt = """You are an AI assistant helping developers understand their Kotlin code analysis results. 
+You provide clear, concise, and helpful explanations about code quality, security issues, and performance concerns.
+When answering questions, reference the specific code and issues that were analyzed."""
+
+        # Add context if available
+        context_parts = []
+        if context:
+            if context.get("original_code"):
+                context_parts.append(f"Analyzed Code:\n```kotlin\n{context['original_code']}\n```")
+            
+            if context.get("detected_issues"):
+                issues_text = "\n".join([
+                    f"- {issue.type}: {issue.description}" 
+                    for issue in context["detected_issues"]
+                ])
+                context_parts.append(f"Detected Issues:\n{issues_text}")
+            
+            if context.get("conversation_history"):
+                # Include last few messages for context
+                history = context["conversation_history"][-3:]  # Last 3 messages
+                history_text = "\n".join([
+                    f"{msg.get('role', 'user')}: {msg.get('content', '')}"
+                    for msg in history
+                ])
+                context_parts.append(f"Recent Conversation:\n{history_text}")
+
+        # Combine context and user message
+        full_prompt = system_prompt
+        if context_parts:
+            full_prompt += "\n\n" + "\n\n".join(context_parts)
+        full_prompt += f"\n\nUser Question: {user_message}\n\nPlease provide a helpful and specific answer:"
+
+        # Use the existing invoke method
+        try:
+            response = self.invoke(
+                prompt=full_prompt,
+                max_tokens=max_tokens,
+                temperature=temperature
+            )
+            return response
+        except Exception as e:
+            logger.error(f"Chat invocation failed: {e}")
+            return f"I apologize, but I encountered an error processing your question. Please try again."
