@@ -83,7 +83,7 @@ When answering questions, reference the specific code and issues that were analy
                 # Include last few messages for context
                 history = context["conversation_history"][-3:]  # Last 3 messages
                 history_text = "\n".join([
-                    f"{msg.get('role', 'user')}: {msg.get('content', '')}"
+                    f"{msg.role}: {msg.content}"
                     for msg in history
                 ])
                 context_parts.append(f"Recent Conversation:\n{history_text}")
