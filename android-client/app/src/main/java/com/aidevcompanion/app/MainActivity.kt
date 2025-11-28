@@ -43,8 +43,9 @@ class MainActivity : ComponentActivity() {
                         composable("chat") {
                             ChatScreen(
                                 uiState = uiState,
-                                onSendMessage = { text, isCode -> 
-                                    viewModel.sendMessage(text, isCode) 
+                                uiEvent = viewModel.uiEvent,
+                                onSendMessage = { text -> 
+                                    viewModel.sendMessage(text) 
                                 }
                             )
                         }

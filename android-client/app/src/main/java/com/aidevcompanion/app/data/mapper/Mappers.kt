@@ -10,7 +10,7 @@ fun ChatResponse.toDomain(): ChatResult {
     return ChatResult(
         conversationId = this.conversation_id,
         message = ChatMessage(
-            content = this.summary ?: this.improved_code ?: "No response",
+            content = this.improved_code ?: this.summary ?: "No response",
             isUser = false,
             isCode = this.improved_code != null,
             issues = this.issues?.map { it.toDomain() },

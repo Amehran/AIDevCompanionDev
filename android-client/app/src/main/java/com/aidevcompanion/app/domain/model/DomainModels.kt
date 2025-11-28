@@ -1,6 +1,7 @@
 package com.aidevcompanion.app.domain.model
 
 data class ChatMessage(
+    val id: String = java.util.UUID.randomUUID().toString(),
     val content: String,
     val isUser: Boolean,
     val isCode: Boolean = false,

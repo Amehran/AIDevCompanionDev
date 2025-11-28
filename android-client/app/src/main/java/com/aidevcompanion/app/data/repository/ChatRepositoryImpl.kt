@@ -39,7 +39,21 @@ class ChatRepositoryImpl @Inject constructor(
             if (response.isSuccessful && response.body() != null) {
                 emit(Result.success(response.body()!!.toDomain()))
             } else {
-                emit(Result.failure(Exception("Error: ${response.code()} ${response.message()}")))
+                // Parse error response for better user feedback
+                val errorMessage = when (response.code()) {
+                    400 -> {
+                        val errorBody = response.errorBody()?.string()
+                        if (errorBody?.contains("source_code") == true) {
+                            "Please start a new conversation by sending code in Code Mode (▶️)"
+                        } else {
+                            "Bad request: ${response.message()}"
+                        }
+                    }
+                    422 -> "Invalid input. Please check your message and try again."
+                    500 -> "Server error. Please try again later."
+                    else -> "Error: ${response.code()} ${response.message()}"
+                }
+                emit(Result.failure(Exception(errorMessage)))
             }
         } catch (e: Exception) {
             emit(Result.failure(e))
