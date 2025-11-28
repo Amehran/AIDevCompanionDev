@@ -94,9 +94,11 @@ When answering questions, reference the specific code and issues that were analy
             full_prompt += "\n\n" + "\n\n".join(context_parts)
         full_prompt += f"\n\nUser Question: {user_message}\n\nPlease provide a helpful and specific answer:"
 
-        # Use the existing invoke method
+        # Use run_in_threadpool to make synchronous invoke work in async context
         try:
-            response = self.invoke(
+            from starlette.concurrency import run_in_threadpool
+            response = await run_in_threadpool(
+                self.invoke,
                 prompt=full_prompt,
                 max_tokens=max_tokens,
                 temperature=temperature
