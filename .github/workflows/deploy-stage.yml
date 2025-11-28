@@ -11,8 +11,53 @@ permissions:
   contents: read
 
 jobs:
+  test-backend:
+    name: Test Backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov httpx
+
+      - name: Run Backend Tests
+        run: |
+          pytest --cov=app tests/
+
+  test-android:
+    name: Test Android Client
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android-client/gradlew
+
+      - name: Run Android Unit Tests
+        run: |
+          cd android-client
+          ./gradlew testDebugUnitTest
+
   deploy:
-    name: Build and Deploy
+    name: Build and Deploy Backend
+    needs: test-backend
     runs-on: ubuntu-latest
     environment: staging
     env:
