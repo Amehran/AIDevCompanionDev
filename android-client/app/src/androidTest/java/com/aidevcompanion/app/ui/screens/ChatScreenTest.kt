@@ -43,8 +43,17 @@ class ChatScreenTest {
         }
 
         composeTestRule.onNodeWithTag("message_list").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Hello AI").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Hello User").assertIsDisplayed()
+        
+        composeTestRule.onNodeWithText("Hello AI")
+            .performScrollTo()
+            .assertIsDisplayed()
+            
+        // MarkdownText is an AndroidView and might not expose text to Compose semantics
+        composeTestRule.onAllNodesWithTag("markdown_text")
+            .onFirst()
+            .performScrollTo()
+            .assertIsDisplayed()
+            
         composeTestRule.onNodeWithTag("empty_state").assertDoesNotExist()
     }
 

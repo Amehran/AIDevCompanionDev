@@ -313,11 +313,13 @@ fun ChatBubble(
                             style = MaterialTheme.typography.bodyMedium
                         )
                     } else {
-                        MarkdownText(
-                            markdown = message.content,
-                            color = contentColor,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Box(modifier = Modifier.testTag("markdown_text")) {
+                            MarkdownText(
+                                markdown = message.content,
+                                color = contentColor,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 }
             }
