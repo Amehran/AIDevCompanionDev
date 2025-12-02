@@ -26,6 +26,9 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Lambda deployment artifacts
+lambda_bundle.zip
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
@@ -135,6 +138,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+temp_venv*/
 
 # Spyder project settings
 .spyderproject
@@ -181,3 +185,6 @@ cython_debug/
 # Ignore Accounts database in capstone project
 6_mcp/accounts.db
 6_mcp/memory/*.db
+# Android Profiling
+*.hprof
+.gradle/

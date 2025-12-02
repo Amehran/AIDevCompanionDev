@@ -1,16 +1,14 @@
 from fastapi import APIRouter
-from typing import Any, Dict
+from app.core.config import settings
 
-router = APIRouter()
+router = APIRouter(prefix="/health", tags=["health"])
 
-@router.get("/")
-async def root():
-    return {"message": "Hello from ai-dev-companion-backend!"}
-
-@router.post("/test")
-async def test_post():
-    return {"status": "ok"}
-
-@router.post("/echo")
-async def echo(payload: Dict[str, Any]):
-    return {"received": payload}
+@router.get("")
+async def health_check():
+    """Health check endpoint"""
+    key = settings.bedrock_api_key or ""
+    return {
+        "status": "healthy",
+        "service": "ai-dev-companion-backend",
+        "api_key_configured": bool(key)
+    }

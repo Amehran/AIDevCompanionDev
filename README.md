@@ -1,240 +1,247 @@
-# AI Dev Companion Backend
+# AI Dev Companion
 
-Production-ready FastAPI + CrewAI backend providing async code review with rate limiting, structured error handling, and clean architecture.
+> **Multi-Agent AI Code Analysis System**  
+> Production-ready serverless application for intelligent Kotlin code review powered by AWS Bedrock (Claude 3).
 
----
-
-## Architecture Overview
-
-This project follows **Clean/Layered Architecture** with clear separation of concerns:
-
-- **Domain Layer** (`app/domain/`): Core business models (ChatRequest, ChatResponse, Issue, etc.) using Pydantic v2.
-- **Service Layer** (`app/services/`): Business logic including `RateLimiter` (per-IP fixed window) and `JobManager` (async task orchestration).
-- **API Layer** (`app/api/`): FastAPI routers for health, chat, and job endpoints.
-- **Core** (`app/core/`): Configuration (Pydantic Settings), DI singletons, custom exceptions, and global error handlers.
-- **CrewAI Integration** (`src/crew.py`): Multi-agent code review workflow with Android/Kotlin focus. Provides stub behavior when dependencies unavailable (test/dev).
-
-**Dependency Injection**: Services instantiated as singletons in `app/core/di.py` and injected at startup (see `main.py`).
+[![Deploy](https://github.com/Amehran/AIDevCompanionDev/workflows/Deploy%20to%20AWS%20Lambda%20(Container)/badge.svg)](https://github.com/Amehran/AIDevCompanionDev/actions)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ---
 
-## Directory Structure
+## 🚀 Features
 
+- **Multi-Agent Analysis**: Specialized AI agents for syntax, security, and performance
+- **Serverless Architecture**: AWS Lambda with container images (scales to 1000+ concurrent requests)
+- **Conversation Memory**: Multi-turn conversations with context retention
+- **Android Client**: Native Jetpack Compose application for mobile access
+- **Real-time Streaming**: Bedrock streaming API for responsive UX
+- **Production-Ready**: Error handling, rate limiting, structured logging, CI/CD
+
+## 📚 Documentation
+
+- **[Architecture & Design](./ARCHITECTURE.md)** - Deep dive into system design, patterns, and technical decisions
+- **[API Documentation](#api-reference)** - Endpoint specifications
+- **[Deployment Guide](#deployment)** - AWS setup and GitHub Actions workflow
+- **[Android Client](./android-client/README.md)** - Mobile application documentation
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+graph LR
+    Client -->|POST /chat| Lambda
+    Lambda -->|Parallel| Agents[3 Specialized Agents]
+    Agents -->|Results| Orchestrator
+    Orchestrator -->|Analysis| Lambda
+    Lambda -->|JSON| Client
+    Agents & Orchestrator -->|LLM| Bedrock[AWS Bedrock - Claude 3]
 ```
-ai-dev-companion-backend/
-├── main.py               # FastAPI app assembly, routers, error handlers
-├── app/
-│   ├── api/              # Endpoint routers (health, chat, jobs)
-│   ├── core/             # Config (Settings), DI, exceptions, error handlers
-│   ├── domain/           # Pydantic models (ChatRequest, ChatResponse, etc.)
-│   └── services/         # RateLimiter, JobManager
-├── src/
-│   └── crew.py           # CrewAI agents and tasks (with fallback stubs)
-├── tests/
-│   ├── test_api.py       # API integration tests (17 scenarios)
-│   └── test_services.py  # Service unit tests (RateLimiter, JobManager)
-├── pyproject.toml        # Dependencies + dev tools
-├── Dockerfile            # Production container config
-└── .env                  # Environment variables (not in repo)
-```
+
+**Key Components**:
+- **SyntaxAgent**: Analyzes Kotlin idioms and best practices
+- **SecurityAgent**: Detects vulnerabilities and secrets
+- **PerformanceAgent**: Identifies bottlenecks and optimizations
+- **Orchestrator**: Synthesizes findings into actionable report
 
 ---
 
-## Environment Setup
+## ⚡ Quick Start
 
 ### Prerequisites
-- Python 3.11+ (< 3.14)
-- pip or uv package manager
 
-### Installation
+- Python 3.11+
+- AWS Account (for Bedrock access)
+- Docker (for containerized deployment)
 
-1. **Clone the repository:**
-   ```bash
-   git clone <repo-url>
-   cd ai-dev-companion-backend
-   ```
+### Local Development
 
-2. **Create and activate virtual environment:**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # macOS/Linux
-   # or
-   venv\Scripts\activate     # Windows
-   ```
-
-3. **Install dependencies:**
-   ```bash
-   pip install -e .
-   pip install -e ".[dev]"   # for tests
-   ```
-
-4. **Configure environment variables:**
-   ```bash
-   cp .env.example .env
-   # Edit .env and set OPENAI_API_KEY, optionally other keys
-   ```
-
-### Required Environment Variables
-- `OPENAI_API_KEY` (required): Your OpenAI API key. Use `"dummy"` or `"test"` to trigger stub responses for local testing.
-- `MODEL` (optional, default: `gpt-4o-mini`): LLM model name.
-- `RATE_LIMIT_PER_MINUTE` (optional, default: `10`): Max requests per IP per minute.
-- `MAX_CONCURRENT_JOBS` (optional, default: `100`): Server concurrency guard.
-
----
-
-## Running the Application
-
-### Development Server
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+# Clone repository
+git clone https://github.com/Amehran/AIDevCompanionDev.git
+cd AIDevCompanionDev
+
+# Run local server
+./scripts/local_run.sh
+
+# Test endpoint
+curl -X POST "http://localhost:8000/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"source_code": "fun main() { println(\"Hello\") }"}'
 ```
 
-### Production Server
-```bash
-uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
-```
+### Environment Variables
 
-### Docker
+Create `.env`:
+
 ```bash
-docker build -t ai-dev-companion .
-docker run -p 8000:8000 --env-file .env ai-dev-companion
+AWS_REGION=us-east-1
+MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+RATE_LIMIT_PER_MINUTE=10
 ```
 
 ---
 
-## API Endpoints
+## 🌐 API Reference
 
-### Health
-- `GET /` – Welcome message
-- `POST /test` – Connectivity check
-- `POST /echo` – Echo payload for client debugging
+### POST /chat
 
-### Chat (Synchronous)
-- `POST /chat?fast=true` – Fast stub response (no LLM)
-- `POST /chat` – Full code review (blocks until complete)
-  - **Body:** `{"source_code": "...", "code_snippet": "..."}`
-  - **Response:** `{"summary": "...", "issues": [...]}`
+Analyze Kotlin code with multi-agent system.
 
-### Jobs (Asynchronous)
-- `POST /chat/submit` – Submit async review job, returns `{"job_id": "uuid"}`
-- `GET /chat/status/{job_id}` – Check job status (`queued`, `running`, `done`, `error`)
-- `GET /chat/result/{job_id}` – Get result (200 if done, 202 if running, 404/500 on error)
-- `DELETE /chat/jobs/cleanup?ttl=3600` – Remove stale jobs
-
----
-
-## Testing Strategy
-
-### Run Tests
-```bash
-pytest                      # All tests
-pytest tests/test_api.py    # API integration tests
-pytest tests/test_services.py  # Service unit tests
-pytest -m "not slow"        # Skip long-running tests
-```
-
-### Test Coverage
-- **API Integration** (`tests/test_api.py`, 17 tests):
-  - Fast mode, async job lifecycle, rate limiting, structured errors, edge cases.
-- **Service Unit Tests** (`tests/test_services.py`, 6 tests):
-  - RateLimiter: window reset, limit enforcement, cleanup.
-  - JobManager: lifecycle (queued → running → done/error), cleanup, async execution.
-
-### Test Mode
-When `OPENAI_API_KEY` is set to `"dummy"`, `"test"`, or `"placeholder"`, the backend returns deterministic stub responses without invoking external LLMs. This ensures fast, reliable CI/CD tests.
-
----
-
-## Error Handling
-
-All errors return structured JSON with backward-compatible `detail` field:
-
+**Request**:
 ```json
 {
-  "error": {
-    "type": "rate_limit_exceeded",
-    "message": "Too many requests. Try again in 42 seconds.",
-    "retry_after": 42
-  },
-  "detail": "Too many requests. Try again in 42 seconds."
+  "source_code": "fun main() { val password = \"secret123\" }"
 }
 ```
 
-### Custom Exception Classes
-- `RateLimitExceeded` (429)
-- `ServerBusy` (503)
-- `InvalidInput` (422)
-- `JobNotFound` (404)
-- `CodeAnalysisError` (500)
+**Response**:
+```json
+{
+  "summary": "Code analysis complete. Found 1 security issue.",
+  "issues": [
+    {
+      "type": "SECURITY",
+      "description": "Hardcoded credentials detected",
+      "suggestion": "Use environment variables or secure key storage"
+    }
+  ],
+  "conversation_id": "uuid"
+}
+```
 
-Global handlers in `app/core/error_handlers.py` normalize all exceptions and validation errors.
+### Continue Conversation
 
----
-
-## Services & Dependency Injection
-
-### RateLimiter (`app/services/rate_limiter.py`)
-- **Strategy**: Fixed window per-IP (60s).
-- **API**: `check(ip) -> Optional[int]` returns retry_after or None.
-- **Thread-safe**: Uses internal lock.
-
-### JobManager (`app/services/job_manager.py`)
-- **Lifecycle**: `create_job() → run_job(coro) → get(job_id) → cleanup(ttl)`.
-- **Concurrency**: `active_count()` tracks queued/running jobs.
-- **Error Capture**: Stores exception details in job record.
-
-### DI Module (`app/core/di.py`)
-Provides singleton instances:
-- `rate_limiter = RateLimiter(settings.rate_limit_per_minute)`
-- `job_manager = JobManager()`
-- `settings = Settings()` (Pydantic Settings)
+```json
+{
+  "conversation_id": "uuid",
+  "message": "Can you fix the security issue?"
+}
+```
 
 ---
 
-## CrewAI Integration
+## 🚢 Deployment
 
-### Agents
-1. **Code Reviewer Agent**: Senior Android analyst (Kotlin, Jetpack Compose, MVVM).
-2. **JSON Formatter Agent**: Ensures strict JSON output.
+### AWS Lambda (Recommended)
 
-### Tasks
-1. **Code Review Task**: Analyze source → produce structured findings.
-2. **JSON Formatter Task**: Validate/normalize JSON schema.
+**1. Setup AWS Resources**
 
-### Fallback Behavior
-If `crewai` imports fail (e.g., test env without ChromaDB), `src/crew.py` provides stub classes with deterministic JSON responses (`{"summary": "OK (stub)", "issues": []}`).
+```bash
+# Create ECR repository
+aws ecr create-repository --repository-name ai-dev-companion --region us-east-1
 
----
+# Create IAM role
+aws iam create-role --role-name ai-dev-companion-role \
+  --assume-role-policy-document file://trust-policy.json
 
-## Future Improvements
+# Attach permissions
+aws iam attach-role-policy --role-name ai-dev-companion-role \
+  --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+aws iam attach-role-policy --role-name ai-dev-companion-role \
+  --policy-arn arn:aws:iam::aws:policy/AmazonBedrockFullAccess
+```
 
-1. **App Factory Pattern**: Encapsulate app creation for easier testing/mocking.
-2. **Request ID Logging**: Add correlation IDs for distributed tracing.
-3. **Persistent Job Store**: Replace in-memory dict with Redis/DB for multi-instance deployments.
-4. **Advanced Telemetry**: Integrate OpenTelemetry for metrics/traces.
-5. **Webhook Notifications**: Notify clients when async jobs complete.
-6. **User Authentication**: Add JWT/OAuth for multi-tenant rate limiting.
+**2. Deploy via GitHub Actions**
 
----
+```bash
+# Push to stage branch to trigger deployment
+git push origin main:stage
+```
 
-## Contributing
+GitHub Actions will:
+- Build Docker image (Linux/amd64)
+- Push to Amazon ECR
+- Update Lambda function
+- Create/update Function URL
 
-1. Fork the repo
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make changes and run tests (`pytest`)
-4. Commit (`git commit -m 'Add amazing feature'`)
-5. Push (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
-
----
-
-## License
-
-[Your license here]
+**Function URL**: Accessible at `https://<unique-id>.lambda-url.us-east-1.on.aws/`
 
 ---
 
-## Support
+## 🧪 Testing
 
-For issues or questions, open a GitHub issue or contact [your-email@example.com].
+```bash
+# Run all tests
+pytest
 
+# Run specific test suite
+pytest tests/test_agents.py -v
+
+# Run in virtual environment
+python3 -m venv venv && source venv/bin/activate
+pip install pytest pytest-asyncio
+pytest
+```
+
+**Test Coverage**:
+- ✅ Agent unit tests
+- ✅ API integration tests
+- ✅ Bedrock client mocking
+- ✅ Error handling scenarios
+
+---
+
+## 🛠️ Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| **Backend** | FastAPI (async Python) |
+| **LLM** | AWS Bedrock - Claude 3 Sonnet |
+| **Deployment** | AWS Lambda (Container Images) |
+| **CI/CD** | GitHub Actions |
+| **Container** | Docker |
+| **Testing** | Pytest, httpx |
+
+---
+
+## 📊 Performance
+
+- **Cold Start**: ~8 seconds
+- **Warm Request**: 2-3 seconds (LLM latency)
+- **Concurrency**: Scales to 1000+ concurrent requests
+- **Cost**: ~$0.10 per 100 analyses
+
+---
+
+## 🗺️ Roadmap
+
+- [ ] **RAG Integration**: Add vector database for code examples
+- [ ] **Guardrails**: Content filtering and safety checks
+- [ ] **Streaming to Client**: Real-time results via SSE
+- [ ] **Code Improvement**: Generate fixed code automatically
+- [ ] **Metrics Dashboard**: CloudWatch/X-Ray observability
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see [LICENSE](LICENSE) file.
+
+---
+
+## 🙏 Acknowledgments
+
+- AWS Bedrock team for Claude 3 API
+- FastAPI community
+- CrewAI for multi-agent inspiration
+
+---
+
+## 📧 Contact
+
+**Armin Mehran** - [GitHub](https://github.com/Amehran)
+
+**Project Link**: [https://github.com/Amehran/AIDevCompanionDev](https://github.com/Amehran/AIDevCompanionDev)

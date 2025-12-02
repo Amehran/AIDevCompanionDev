@@ -59,8 +59,8 @@ poetry run pytest -v -s
 
 ### Async Job Flow (`test_full_job_flow`, `test_job_status_not_found`)
 - Moderate speed (5-30s per test)
-- Requires OpenAI API key in `.env`
-- Tests real LLM integration
+- Requires AWS Bedrock API key in `.env`
+- Tests real Bedrock LLM integration
 
 ### Rate Limiting (`test_rate_limit_per_ip`, `test_concurrent_jobs_limit`)
 - Fast to moderate (1-5s)
@@ -76,8 +76,9 @@ poetry run pytest -v -s
 Tests use the same `.env` file as the application:
 
 ```bash
-OPENAI_API_KEY=sk-...
-MODEL=gpt-4o-mini
+BEDROCK_API_KEY=...
+BEDROCK_REGION=us-east-1
+MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
 RATE_LIMIT_PER_MINUTE=5
 MAX_CONCURRENT_JOBS=3
 ```
@@ -107,7 +108,9 @@ jobs:
           poetry install --with dev
       - name: Run tests
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          BEDROCK_API_KEY: ${{ secrets.BEDROCK_API_KEY }}
+          BEDROCK_REGION: ${{ secrets.BEDROCK_REGION }}
+          MODEL_ID: ${{ secrets.MODEL_ID }}
         run: poetry run pytest -m "not slow"
 ```
 

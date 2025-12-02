@@ -1,185 +1,67 @@
-"""
-Custom exceptions for the application.
-
-These exceptions provide structured error handling with consistent
-error responses across the API.
-"""
-
-from typing import Any, Dict, Optional
-
+"""Minimal exceptions for API validation."""
 
 class AppException(Exception):
-    """
-    Base exception for all application errors.
+    """Base exception for application errors with status codes."""
+    status_code = 500
     
-    All custom exceptions should inherit from this class.
-    This allows for consistent error handling and structured error responses.
-    """
-    
-    def __init__(
-        self,
-        message: str,
-        status_code: int = 500,
-        error_type: str = "internal_error",
-        details: Optional[Any] = None
-    ):
-        """
-        Initialize application exception.
-        
-        Args:
-            message: Human-readable error message
-            status_code: HTTP status code
-            error_type: Machine-readable error type identifier
-            details: Additional error details (optional)
-        """
-        super().__init__(message)
-        self.message = message
-        self.status_code = status_code
-        self.error_type = error_type
-        self.details = details
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Convert exception to dictionary for JSON response.
-        
-        Returns:
-            Dictionary with error details in structured format
-        """
-        error_dict = {
+    def to_dict(self):
+        """Convert exception to dictionary for JSON responses."""
+        return {
             "error": {
-                "type": self.error_type,
-                "message": self.message,
+                "type": self.__class__.__name__,
+                "message": str(self)
             }
         }
-        
-        if self.details is not None:
-            error_dict["error"]["details"] = self.details
-        
-        return error_dict
-
-
-class RateLimitExceeded(AppException):
-    """
-    Exception raised when rate limit is exceeded.
-    
-    Returns HTTP 429 (Too Many Requests) with retry_after information.
-    """
-    
-    def __init__(self, retry_after: int):
-        """
-        Initialize rate limit exception.
-        
-        Args:
-            retry_after: Number of seconds until the client can retry
-        """
-        super().__init__(
-            message=f"Too many requests. Try again in {retry_after} seconds.",
-            status_code=429,
-            error_type="rate_limit_exceeded",
-            details=None
-        )
-        self.retry_after = retry_after
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Add retry_after to error response."""
-        result = super().to_dict()
-        result["error"]["retry_after"] = self.retry_after
-        return result
-
-
-class ServerBusy(AppException):
-    """
-    Exception raised when server is at capacity.
-    
-    Returns HTTP 503 (Service Unavailable) when max concurrent jobs reached.
-    """
-    
-    def __init__(self, active_jobs: int, max_concurrent: int):
-        """
-        Initialize server busy exception.
-        
-        Args:
-            active_jobs: Number of currently active jobs
-            max_concurrent: Maximum concurrent jobs allowed
-        """
-        super().__init__(
-            message="Server is busy. Please try again shortly.",
-            status_code=503,
-            error_type="server_busy",
-            details={
-                "active_jobs": active_jobs,
-                "max_concurrent": max_concurrent,
-            }
-        )
-        self.active_jobs = active_jobs
-        self.max_concurrent = max_concurrent
-
-
-class CodeAnalysisError(AppException):
-    """
-    Exception raised when code analysis fails.
-    
-    Returns HTTP 500 with details about the analysis failure.
-    """
-    
-    def __init__(self, message: str, details: Optional[str] = None):
-        """
-        Initialize code analysis error.
-        
-        Args:
-            message: Human-readable error message
-            details: Technical details about the error (optional)
-        """
-        super().__init__(
-            message=message,
-            status_code=500,
-            error_type="code_analysis_error",
-            details=details
-        )
 
 
 class InvalidInput(AppException):
-    """
-    Exception raised when input validation fails.
+    """Raised when request input is missing or invalid."""
+    status_code = 400
+
+
+class RateLimitExceeded(AppException):
+    """Raised when rate limit is exceeded."""
+    status_code = 429
     
-    Returns HTTP 422 (Unprocessable Entity).
-    """
+    def __init__(self, retry_after: float):
+        self.retry_after = retry_after
+        super().__init__(f"Rate limit exceeded. Retry after {retry_after:.1f} seconds")
     
-    def __init__(self, message: str, field: Optional[str] = None):
-        """
-        Initialize invalid input exception.
-        
-        Args:
-            message: Human-readable error message
-            field: Name of the invalid field (optional)
-        """
-        details = {"field": field} if field else None
-        super().__init__(
-            message=message,
-            status_code=422,
-            error_type="invalid_input",
-            details=details
-        )
+    def to_dict(self):
+        """Include retry_after in response."""
+        data = super().to_dict()
+        data["retry_after"] = self.retry_after
+        return data
+
+
+class ServerBusy(AppException):
+    """Raised when server has too many concurrent jobs."""
+    status_code = 503
+    
+
+    def __init__(self, active_jobs: int, max_concurrent: int):
+        self.active_jobs = active_jobs
+        self.max_concurrent = max_concurrent
+        super().__init__(f"Server busy: {active_jobs}/{max_concurrent} jobs active")
+
+    def to_dict(self):
+        # Override error type to match test expectation and add details field
+        return {
+            "error": {
+                "type": "server_busy",
+                "message": str(self),
+                "details": {
+                    "active_jobs": self.active_jobs,
+                    "max_concurrent": self.max_concurrent
+                }
+            }
+        }
 
 
 class JobNotFound(AppException):
-    """
-    Exception raised when a job is not found.
-    
-    Returns HTTP 404 (Not Found).
-    """
+    """Raised when a job ID is not found."""
+    status_code = 404
     
     def __init__(self, job_id: str):
-        """
-        Initialize job not found exception.
-        
-        Args:
-            job_id: ID of the job that was not found
-        """
-        super().__init__(
-            message=f"Job '{job_id}' not found.",
-            status_code=404,
-            error_type="job_not_found",
-            details={"job_id": job_id}
-        )
         self.job_id = job_id
+        super().__init__(f"Job not found: {job_id}")
