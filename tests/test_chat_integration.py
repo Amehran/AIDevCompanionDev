@@ -5,7 +5,7 @@ from main import app
 
 @pytest.fixture
 def mock_swarm():
-    with patch("app.services.agents.KotlinAnalysisSwarm") as MockSwarm:
+    with patch("app.api.chat.KotlinAnalysisSwarm") as MockSwarm:
         instance = MockSwarm.return_value
         # Configure analyze to be awaitable
         instance.analyze = AsyncMock(return_value={

@@ -1,184 +1,150 @@
 # AI Dev Companion
 
-> **Multi-Agent AI Code Analysis System**  
-> Production-ready serverless application for intelligent Kotlin code review powered by AWS Bedrock (Claude 3).
+> **Next-Generation AI Code Analysis & Improvement System**  
+> A production-ready, serverless multi-agent system that analyzes, explains, and **automatically improves** Kotlin code using AWS Bedrock (Claude 3). Includes a native Android client.
 
 [![Deploy](https://github.com/Amehran/AIDevCompanionDev/workflows/Deploy%20to%20AWS%20Lambda%20(Container)/badge.svg)](https://github.com/Amehran/AIDevCompanionDev/actions)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
+[![Kotlin](https://img.shields.io/badge/kotlin-1.9-purple.svg)](https://kotlinlang.org/)
 
 ---
 
-## 🚀 Features
+## 🚀 Overview
 
-- **Multi-Agent Analysis**: Specialized AI agents for syntax, security, and performance
-- **Serverless Architecture**: AWS Lambda with container images (scales to 1000+ concurrent requests)
-- **Conversation Memory**: Multi-turn conversations with context retention
-- **Android Client**: Native Jetpack Compose application for mobile access
-- **Real-time Streaming**: Bedrock streaming API for responsive UX
-- **Production-Ready**: Error handling, rate limiting, structured logging, CI/CD
+**AI Dev Companion** goes beyond simple code completion. It employs a **Multi-Agent Architecture** where specialized AI agents (Syntax, Security, Performance) collaborate to provide deep, expert-level analysis of your code.
 
-## 📚 Documentation
+Unlike standard chatbots, this system maintains **conversational context**, allowing you to discuss the findings, ask for explanations, and **apply fixes automatically** through an interactive dialogue.
 
-- **[Architecture & Design](./ARCHITECTURE.md)** - Deep dive into system design, patterns, and technical decisions
-- **[API Documentation](#api-reference)** - Endpoint specifications
-- **[Deployment Guide](#deployment)** - AWS setup and GitHub Actions workflow
-- **[Android Client](./android-client/README.md)** - Mobile application documentation
+### ✨ Key Features
+
+- **🤖 Multi-Agent Swarm**: Three specialized agents analyze code in parallel for comprehensive coverage.
+- **🛠️ Automated Improvements**: The system can rewrite your code to fix security vulnerabilities, performance bottlenecks, and style issues upon request.
+- **📱 Native Android Client**: A full-featured Jetpack Compose app to take your AI companion on the go.
+- **🧠 Contextual Memory**: Remembers previous turns in the conversation for a natural, flowing dialogue.
+- **☁️ Serverless Architecture**: Built on AWS Lambda with container images, scaling to 1000+ concurrent requests with zero infrastructure management.
+- **⚡ Real-time Streaming**: Powered by AWS Bedrock for fast, streaming responses.
 
 ---
 
 ## 🏗️ Architecture
 
+The system uses a swarm of agents orchestrated to deliver a unified analysis report.
+
 ```mermaid
-graph LR
-    Client -->|POST /chat| Lambda
-    Lambda -->|Parallel| Agents[3 Specialized Agents]
-    Agents -->|Results| Orchestrator
-    Orchestrator -->|Analysis| Lambda
-    Lambda -->|JSON| Client
-    Agents & Orchestrator -->|LLM| Bedrock[AWS Bedrock - Claude 3]
+graph TB
+    Client[Client (Web/Android)] -->|POST /chat| Lambda[AWS Lambda]
+    Lambda -->|Parallel Invocation| Swarm[Agent Swarm]
+    
+    subgraph "Agent Swarm"
+        Syntax[Syntax Agent]
+        Security[Security Agent]
+        Perf[Performance Agent]
+    end
+    
+    Swarm -->|Findings| Orch[Orchestrator]
+    Orch -->|Synthesized Report| Lambda
+    Lambda -->|JSON Response| Client
+    
+    Swarm & Orch -->|LLM Calls| Bedrock[AWS Bedrock - Claude 3]
 ```
 
-**Key Components**:
-- **SyntaxAgent**: Analyzes Kotlin idioms and best practices
-- **SecurityAgent**: Detects vulnerabilities and secrets
-- **PerformanceAgent**: Identifies bottlenecks and optimizations
-- **Orchestrator**: Synthesizes findings into actionable report
+For a deep dive into the design patterns and decisions, see [**ARCHITECTURE.md**](./ARCHITECTURE.md).
 
 ---
 
 ## ⚡ Quick Start
 
-### Prerequisites
+### Backend Setup
 
-- Python 3.11+
-- AWS Account (for Bedrock access)
-- Docker (for containerized deployment)
+1. **Prerequisites**: Python 3.11+, Docker, AWS Account.
+2. **Clone & Install**:
+   ```bash
+   git clone https://github.com/Amehran/AIDevCompanionDev.git
+   cd AIDevCompanionDev
+   python3 -m venv .venv && source .venv/bin/activate
+   pip install -r requirements-aws.txt
+   ```
+3. **Run Locally**:
+   ```bash
+   ./scripts/local_run.sh
+   ```
+   The API will be available at `http://localhost:8000`.
 
-### Local Development
+### Android Client
 
-```bash
-# Clone repository
-git clone https://github.com/Amehran/AIDevCompanionDev.git
-cd AIDevCompanionDev
-
-# Run local server
-./scripts/local_run.sh
-
-# Test endpoint
-curl -X POST "http://localhost:8000/chat" \
-  -H "Content-Type: application/json" \
-  -d '{"source_code": "fun main() { println(\"Hello\") }"}'
-```
-
-### Environment Variables
-
-Create `.env`:
-
-```bash
-AWS_REGION=us-east-1
-MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
-RATE_LIMIT_PER_MINUTE=10
-```
+The project includes a modern Android application built with Jetpack Compose.
+See [**android-client/README.md**](./android-client/README.md) for installation instructions.
 
 ---
 
-## 🌐 API Reference
+## 📖 Usage Guide
 
-### POST /chat
+### 1. Code Analysis
+Send Kotlin code to the API to receive a structured analysis.
 
-Analyze Kotlin code with multi-agent system.
-
-**Request**:
-```json
-{
-  "source_code": "fun main() { val password = \"secret123\" }"
-}
+**Request:**
+```bash
+curl -X POST "http://localhost:8000/chat" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_code": "fun main() { val password = \"secret123\" }"
+  }'
 ```
 
-**Response**:
+**Response:**
 ```json
 {
-  "summary": "Code analysis complete. Found 1 security issue.",
+  "summary": "Analysis complete. Found 1 critical security issue.",
   "issues": [
     {
       "type": "SECURITY",
       "description": "Hardcoded credentials detected",
-      "suggestion": "Use environment variables or secure key storage"
+      "suggestion": "Use environment variables"
     }
   ],
-  "conversation_id": "uuid"
+  "conversation_id": "550e8400-e29b-..."
 }
 ```
 
-### Continue Conversation
+### 2. Interactive Improvements
+You can ask the AI to fix the issues found.
 
+**Request:**
+```bash
+curl -X POST "http://localhost:8000/chat" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversation_id": "550e8400-e29b-...",
+    "message": "Fix the security issue",
+    "apply_improvements": true
+  }'
+```
+
+**Response:**
 ```json
 {
-  "conversation_id": "uuid",
-  "message": "Can you fix the security issue?"
+  "summary": "Code improvements applied successfully.",
+  "improved_code": "fun main() { val password = System.getenv(\"PASSWORD\") }",
+  "awaiting_user_input": false
 }
 ```
-
----
-
-## 🚢 Deployment
-
-### AWS Lambda (Recommended)
-
-**1. Setup AWS Resources**
-
-```bash
-# Create ECR repository
-aws ecr create-repository --repository-name ai-dev-companion --region us-east-1
-
-# Create IAM role
-aws iam create-role --role-name ai-dev-companion-role \
-  --assume-role-policy-document file://trust-policy.json
-
-# Attach permissions
-aws iam attach-role-policy --role-name ai-dev-companion-role \
-  --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-aws iam attach-role-policy --role-name ai-dev-companion-role \
-  --policy-arn arn:aws:iam::aws:policy/AmazonBedrockFullAccess
-```
-
-**2. Deploy via GitHub Actions**
-
-```bash
-# Push to stage branch to trigger deployment
-git push origin main:stage
-```
-
-GitHub Actions will:
-- Build Docker image (Linux/amd64)
-- Push to Amazon ECR
-- Update Lambda function
-- Create/update Function URL
-
-**Function URL**: Accessible at `https://<unique-id>.lambda-url.us-east-1.on.aws/`
 
 ---
 
 ## 🧪 Testing
 
+The project maintains high test coverage using `pytest`.
+
 ```bash
 # Run all tests
 pytest
 
-# Run specific test suite
-pytest tests/test_agents.py -v
-
-# Run in virtual environment
-python3 -m venv venv && source venv/bin/activate
-pip install pytest pytest-asyncio
-pytest
+# Run specific suite
+pytest tests/test_crew.py -v
 ```
 
-**Test Coverage**:
-- ✅ Agent unit tests
-- ✅ API integration tests
-- ✅ Bedrock client mocking
-- ✅ Error handling scenarios
+See [**TESTING.md**](./TESTING.md) for detailed testing strategies.
 
 ---
 
@@ -186,62 +152,35 @@ pytest
 
 | Component | Technology |
 |-----------|------------|
-| **Backend** | FastAPI (async Python) |
-| **LLM** | AWS Bedrock - Claude 3 Sonnet |
-| **Deployment** | AWS Lambda (Container Images) |
+| **Backend** | FastAPI, Python 3.11 |
+| **AI / LLM** | AWS Bedrock (Claude 3 Sonnet) |
+| **Orchestration** | Custom Multi-Agent Swarm |
+| **Mobile** | Android (Kotlin, Jetpack Compose) |
+| **Infrastructure** | AWS Lambda (Docker), ECR |
 | **CI/CD** | GitHub Actions |
-| **Container** | Docker |
-| **Testing** | Pytest, httpx |
-
----
-
-## 📊 Performance
-
-- **Cold Start**: ~8 seconds
-- **Warm Request**: 2-3 seconds (LLM latency)
-- **Concurrency**: Scales to 1000+ concurrent requests
-- **Cost**: ~$0.10 per 100 analyses
 
 ---
 
 ## 🗺️ Roadmap
 
-- [ ] **RAG Integration**: Add vector database for code examples
-- [ ] **Guardrails**: Content filtering and safety checks
-- [ ] **Streaming to Client**: Real-time results via SSE
-- [ ] **Code Improvement**: Generate fixed code automatically
-- [ ] **Metrics Dashboard**: CloudWatch/X-Ray observability
+- [x] **Multi-Agent Analysis**
+- [x] **Contextual Conversation**
+- [x] **Automated Code Improvements**
+- [x] **Android Client**
+- [ ] **RAG Integration** (Vector DB for knowledge retrieval)
+- [ ] **IDE Plugin** (IntelliJ/VS Code)
+- [ ] **User Authentication** (Cognito/Auth0)
 
 ---
 
 ## 🤝 Contributing
 
-Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
----
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
 ## 📝 License
 
-This project is licensed under the MIT License - see [LICENSE](LICENSE) file.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🙏 Acknowledgments
-
-- AWS Bedrock team for Claude 3 API
-- FastAPI community
-- CrewAI for multi-agent inspiration
-
----
-
-## 📧 Contact
-
-**Armin Mehran** - [GitHub](https://github.com/Amehran)
-
-**Project Link**: [https://github.com/Amehran/AIDevCompanionDev](https://github.com/Amehran/AIDevCompanionDev)
+**Built with ❤️ by [Armin Mehran](https://github.com/Amehran)**
