@@ -5,6 +5,9 @@ from starlette.concurrency import run_in_threadpool
 from app.core.di import get_settings, get_conversation_manager
 from app.domain.models import ChatRequest, ChatResponse, Issue, ConversationState
 from src.crew import CodeReviewProject  # type: ignore
+from app.services.agents import KotlinAnalysisSwarm
+from app.bedrock.client import BedrockClient
+import traceback
 import logging
 
 logger = logging.getLogger(__name__)
@@ -77,7 +80,6 @@ async def _handle_new_analysis(
         else:
             logger.info(f"Invoking KotlinAnalysisSwarm for code: {code[:50]}...")
             
-            from app.services.agents import KotlinAnalysisSwarm
             swarm = KotlinAnalysisSwarm()
             
             # Run the swarm analysis
@@ -100,7 +102,6 @@ async def _handle_new_analysis(
                         )
     except Exception as e:
         # Structured error response
-        import traceback
         logger.error(f"ERROR in /chat: {str(e)}")
         trace = traceback.format_exc()
         logger.error(trace)
@@ -131,7 +132,7 @@ async def _handle_new_analysis(
         conv_id,
         role="assistant",
         content=summary or "Analysis complete",
-        metadata={"issues": [issue.dict() for issue in issues]}
+        metadata={"issues": [issue.model_dump() for issue in issues]}
     )
     
     # Prepare response
@@ -249,7 +250,6 @@ async def _handle_apply_improvements(
     ]
     
     # Generate improved code
-    from starlette.concurrency import run_in_threadpool
     improved_code = await run_in_threadpool(
         project.improve_code,
         source_code=original_code,
@@ -340,7 +340,6 @@ async def _handle_general_question(
     
     # Use Bedrock to generate contextual response
     try:
-        from app.bedrock.client import BedrockClient
         bedrock = BedrockClient()
         
         response_summary = await bedrock.chat(
