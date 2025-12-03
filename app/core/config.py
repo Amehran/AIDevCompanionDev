@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     bedrock_api_key: Optional[str] = Field(default=None, description="AWS Bedrock API key (required)")
     bedrock_region: Optional[str] = Field(default=None, description="AWS Bedrock region (required)")
     model_id: Optional[str] = Field(default="anthropic.claude-3-sonnet-20240229-v1:0", description="Bedrock model ID")
+    bedrock_guardrail_id: Optional[str] = Field(default=None, description="AWS Bedrock Guardrail ID")
+    bedrock_guardrail_version: Optional[str] = Field(default=None, description="AWS Bedrock Guardrail Version")
     
     # Rate Limiting
     rate_limit_per_minute: int = Field(default=60, description="Rate limit for API requests per minute")
