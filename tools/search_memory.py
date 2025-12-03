@@ -4,16 +4,16 @@ import sys
 from pinecone import Pinecone
 
 # 1. Configuration
-API_KEY = os.getenv("PINECONE_API_KEY") # Ensure this is set in your terminal/env
 INDEX_NAME = "gemini-code-assistant"    # Must match your ingest script
 
 def search(query):
-    if not API_KEY:
+    api_key = os.getenv("PINECONE_API_KEY")
+    if not api_key:
         print("Error: PINECONE_API_KEY environment variable not set.")
         return
 
     # 2. Initialize Pinecone
-    pc = Pinecone(api_key=API_KEY)
+    pc = Pinecone(api_key=api_key)
     index = pc.Index(INDEX_NAME)
 
     # 3. Embed the query (Using Gemini Embeddings via LangChain or direct API)
