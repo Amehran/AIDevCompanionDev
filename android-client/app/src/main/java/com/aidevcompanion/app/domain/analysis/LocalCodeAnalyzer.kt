@@ -19,7 +19,7 @@ open class LocalCodeAnalyzer @Inject constructor() {
         val suggestions: List<String>
     )
 
-    fun analyze(code: String?): AnalysisResult {
+    open fun analyze(code: String?): AnalysisResult {
         if (code.isNullOrBlank()) {
             return AnalysisResult(false, emptyList(), emptyList())
         }
@@ -97,5 +97,30 @@ open class LocalCodeAnalyzer @Inject constructor() {
     
     private fun isXmlFile(code: String): Boolean {
         return code.trim().startsWith("<") || code.contains("xmlns:android")
+    }
+
+    /**
+     * Attempts to extract source code from a natural language message.
+     * Supports Markdown code blocks and heuristic detection.
+     */
+    open fun extractCode(message: String?): String? {
+        if (message.isNullOrBlank()) return null
+
+        // 1. Extract from Markdown code blocks (```code```)
+        val codeBlockRegex = "```(?:kotlin|java|xml)?\\s*([\\s\\S]*?)```".toRegex()
+        val match = codeBlockRegex.find(message)
+        if (match != null) {
+            return match.groupValues[1].trim()
+        }
+
+        // 2. Heuristic: If the message itself looks like code (and isn't just a sentence)
+        if (isKotlinFile(message) || isXmlFile(message)) {
+            // Ensure it's not just a short sentence containing a keyword
+            if (message.length > 20 && (message.contains("{") || message.contains("</"))) {
+                return message.trim()
+            }
+        }
+
+        return null
     }
 }
