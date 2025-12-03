@@ -10,6 +10,11 @@ class BedrockClient:
         self.client = boto3.client("bedrock-runtime")
         # Default to Claude 3 Sonnet if not specified
         self.model_id = model_id or "anthropic.claude-3-sonnet-20240229-v1:0"
+        
+        # Load guardrail config
+        from app.core.config import settings
+        self.guardrail_id = settings.bedrock_guardrail_id
+        self.guardrail_version = settings.bedrock_guardrail_version
 
     def invoke(self, prompt: str, max_tokens: int = 1024, temperature: float = 0.2) -> str:
         # Claude 3 models require the Messages API
@@ -22,12 +27,20 @@ class BedrockClient:
             "anthropic_version": "bedrock-2023-05-31"
         }
         try:
-            response_stream = self.client.invoke_model_with_response_stream(
-                modelId=self.model_id,
-                contentType="application/json",
-                accept="application/json",
-                body=json.dumps(body)
-            )
+            # Prepare invoke args
+            invoke_args = {
+                "modelId": self.model_id,
+                "contentType": "application/json",
+                "accept": "application/json",
+                "body": json.dumps(body)
+            }
+            
+            # Add Guardrails if configured
+            if self.guardrail_id and self.guardrail_version:
+                invoke_args["guardrailIdentifier"] = self.guardrail_id
+                invoke_args["guardrailVersion"] = self.guardrail_version
+                
+            response_stream = self.client.invoke_model_with_response_stream(**invoke_args)
             # Parse streaming response correctly
             completion = ""
             for event in response_stream["body"]:
