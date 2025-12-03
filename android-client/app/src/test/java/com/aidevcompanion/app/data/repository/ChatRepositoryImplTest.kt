@@ -123,6 +123,29 @@ class ChatRepositoryImplTest {
     }
 
     @Test
+    fun `sendMessage responds locally to thanks`() = runTest {
+        // Given
+        val message = "Thanks for the help"
+        every { localAnalyzer.extractCode(message) } returns null
+
+        // When
+        val flow = repository.sendMessage("123", message, null)
+
+        // Then
+        flow.test {
+            val result = awaitItem()
+            assertTrue(result.isSuccess)
+            val chatResult = result.getOrNull()
+            assertFalse(chatResult?.message?.isUser ?: true)
+            assertTrue(chatResult?.message?.content?.contains("You're welcome") == true)
+            awaitComplete()
+        }
+        
+        // Verify API was NOT called
+        coVerify(exactly = 0) { apiService.chat(any()) }
+    }
+
+    @Test
     fun `sendMessage extracts code and sends to API`() = runTest {
         // Given
         val message = "Check this: ```fun test() {}```"
