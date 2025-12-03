@@ -20,11 +20,14 @@ import retrofit2.Response
 class ChatRepositoryImplTest {
 
     private val apiService: ApiService = mockk()
+    private val localAnalyzer: com.aidevcompanion.app.domain.analysis.LocalCodeAnalyzer = mockk()
     private lateinit var repository: ChatRepositoryImpl
 
     @Before
     fun setUp() {
-        repository = ChatRepositoryImpl(apiService)
+        // Default behavior: No issues found locally
+        io.mockk.every { localAnalyzer.analyze(any()) } returns com.aidevcompanion.app.domain.analysis.LocalCodeAnalyzer.AnalysisResult(false, emptyList(), emptyList())
+        repository = ChatRepositoryImpl(apiService, localAnalyzer)
     }
 
     @Test
@@ -63,6 +66,31 @@ class ChatRepositoryImplTest {
 
         // Then
         assertFalse(result)
+    }
+
+    @Test
+    fun `sendMessage blocks request when local analyzer finds critical issues`() = runTest {
+        // Given
+        val criticalIssue = "CRITICAL: Secret detected"
+        io.mockk.every { localAnalyzer.analyze(any()) } returns com.aidevcompanion.app.domain.analysis.LocalCodeAnalyzer.AnalysisResult(
+            hasCriticalIssues = true,
+            issues = listOf(criticalIssue),
+            suggestions = emptyList()
+        )
+
+        // When
+        val flow = repository.sendMessage("123", "Hello", "val key = \"AKIA...\"")
+
+        // Then
+        flow.test {
+            val result = awaitItem()
+            assertTrue(result.isFailure)
+            assertEquals(criticalIssue, result.exceptionOrNull()?.message)
+            awaitComplete()
+        }
+        
+        // Verify API was NOT called (Efficiency/Security check)
+        io.mockk.coVerify(exactly = 0) { apiService.chat(any()) }
     }
 
     @Test

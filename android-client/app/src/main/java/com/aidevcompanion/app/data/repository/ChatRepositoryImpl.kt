@@ -16,7 +16,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class ChatRepositoryImpl @Inject constructor(
-    private val apiService: ApiService
+    private val apiService: ApiService,
+    private val localAnalyzer: com.aidevcompanion.app.domain.analysis.LocalCodeAnalyzer
 ) : ChatRepository {
 
     override suspend fun checkHealth(): Boolean {
@@ -34,6 +35,18 @@ class ChatRepositoryImpl @Inject constructor(
         sourceCode: String?
     ): Flow<Result<ChatResult>> = flow {
         try {
+            // 1. Hybrid AI: Run Local Analysis First
+            // This is "Pragmatic Architecture" - we save cloud costs and latency
+            // by catching obvious issues or security risks locally.
+            val analysis = localAnalyzer.analyze(sourceCode)
+            
+            if (analysis.hasCriticalIssues) {
+                // Block the request to protect the user (e.g. leaking secrets)
+                val errorMsg = analysis.issues.joinToString("\n")
+                emit(Result.failure(Exception(errorMsg)))
+                return@flow
+            }
+
             val request = ChatRequest(
                 conversationId = conversationId,
                 message = message,
