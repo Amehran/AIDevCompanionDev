@@ -35,10 +35,36 @@ class ChatRepositoryImpl @Inject constructor(
         sourceCode: String?
     ): Flow<Result<ChatResult>> = flow {
         try {
-            // 1. Hybrid AI: Run Local Analysis First
-            // This is "Pragmatic Architecture" - we save cloud costs and latency
-            // by catching obvious issues or security risks locally.
-            val analysis = localAnalyzer.analyze(sourceCode)
+            // 1. Hybrid AI: Code Extraction
+            // If the user didn't explicitly use "Code Mode" but pasted code in the message, extract it.
+            var finalSourceCode = sourceCode
+            if (finalSourceCode.isNullOrBlank()) {
+                finalSourceCode = localAnalyzer.extractCode(message)
+            }
+
+            // 2. Hybrid AI: Local vs Cloud Routing
+            // If we still have no code, this is a "Normal Conversation".
+            // As per architecture, handle this LOCALLY to save cost/latency.
+            if (finalSourceCode.isNullOrBlank()) {
+                // Simulate local AI response (Pragmatic approach: Rule-based for now)
+                val localResponse = when {
+                    message?.contains("hi", ignoreCase = true) == true -> "Hello! I'm your AI Code Companion. Share some Kotlin code, and I'll analyze it for you."
+                    message?.contains("help", ignoreCase = true) == true -> "I can help you optimize Kotlin code, find bugs, and check for security issues. Just paste your code!"
+                    else -> "I'm tuned to analyze code. Please paste a snippet or use Code Mode (▶️)."
+                }
+                
+                emit(Result.success(ChatResult(
+                    conversationId = conversationId ?: java.util.UUID.randomUUID().toString(),
+                    message = com.aidevcompanion.app.domain.model.ChatMessage(
+                        content = localResponse,
+                        isUser = false
+                    )
+                )))
+                return@flow
+            }
+
+            // 3. Hybrid AI: Run Local Analysis First (on the code we found)
+            val analysis = localAnalyzer.analyze(finalSourceCode)
             
             if (analysis.hasCriticalIssues) {
                 // Block the request to protect the user (e.g. leaking secrets)
@@ -50,7 +76,7 @@ class ChatRepositoryImpl @Inject constructor(
             val request = ChatRequest(
                 conversationId = conversationId,
                 message = message,
-                sourceCode = sourceCode
+                sourceCode = finalSourceCode // Use the extracted code
             )
             val response = apiService.chat(request)
             if (response.isSuccessful && response.body() != null) {
