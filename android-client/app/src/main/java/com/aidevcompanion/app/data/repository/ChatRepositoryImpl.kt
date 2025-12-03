@@ -48,6 +48,7 @@ class ChatRepositoryImpl @Inject constructor(
             if (finalSourceCode.isNullOrBlank()) {
                 // Simulate local AI response (Pragmatic approach: Rule-based for now)
                 val localResponse = when {
+                    message?.contains("thanks", ignoreCase = true) == true || message?.contains("thank you", ignoreCase = true) == true -> "You're welcome! Happy coding! 🚀"
                     message?.contains("hi", ignoreCase = true) == true -> "Hello! I'm your AI Code Companion. Share some Kotlin code, and I'll analyze it for you."
                     message?.contains("help", ignoreCase = true) == true -> "I can help you optimize Kotlin code, find bugs, and check for security issues. Just paste your code!"
                     else -> "I'm tuned to analyze code. Please paste a snippet or use Code Mode (▶️)."
