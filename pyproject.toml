@@ -17,6 +17,9 @@ dependencies = [
     # Ensure pkg_resources is available
     "setuptools>=68.0.0",
     "mangum>=0.19.0",
+    "pinecone-client>=3.0.0",
+    "langchain-google-genai>=0.0.1",
+    "langchain-community>=0.0.1",
 ]
 
 [dependency-groups]
