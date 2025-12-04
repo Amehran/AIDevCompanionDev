@@ -146,6 +146,48 @@ class ChatRepositoryImplTest {
     }
 
     @Test
+    fun `sendMessage responds locally to help`() = runTest {
+        // Given
+        val message = "I need help with Kotlin"
+        every { localAnalyzer.extractCode(message) } returns null
+
+        // When
+        val flow = repository.sendMessage("123", message, null)
+
+        // Then
+        flow.test {
+            val result = awaitItem()
+            assertTrue(result.isSuccess)
+            val chatResult = result.getOrNull()
+            assertFalse(chatResult?.message?.isUser ?: true)
+            assertTrue(chatResult?.message?.content?.contains("I can help you optimize Kotlin code") == true)
+            awaitComplete()
+        }
+        
+        // Verify API was NOT called
+        coVerify(exactly = 0) { apiService.chat(any()) }
+    }
+
+    @Test
+    fun `sendMessage emits failure when API call fails`() = runTest {
+        // Given
+        val message = "Analyze this"
+        val code = "fun test(){}"
+        coEvery { apiService.chat(any()) } throws Exception("API Error")
+
+        // When
+        val flow = repository.sendMessage("123", message, code)
+
+        // Then
+        flow.test {
+            val result = awaitItem()
+            assertTrue(result.isFailure)
+            assertEquals("API Error", result.exceptionOrNull()?.message)
+            awaitComplete()
+        }
+    }
+
+    @Test
     fun `sendMessage extracts code and sends to API`() = runTest {
         // Given
         val message = "Check this: ```fun test() {}```"
