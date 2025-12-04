@@ -19,11 +19,12 @@ Unlike standard chatbots, this system maintains **conversational context**, allo
 ### ✨ Key Features
 
 - **🤖 Multi-Agent Swarm**: Three specialized agents analyze code in parallel for comprehensive coverage.
+- **⚡ Hybrid AI Architecture**: Intelligent on-device processing handles simple queries locally, while complex code analysis is routed to the cloud, optimizing for cost and latency.
+- **🛡️ Secure by Design**: Built-in AWS Bedrock Guardrails and local secret scanning ensure safe and responsible AI interactions.
 - **🛠️ Automated Improvements**: The system can rewrite your code to fix security vulnerabilities, performance bottlenecks, and style issues upon request.
 - **📱 Native Android Client**: A full-featured Jetpack Compose app to take your AI companion on the go.
 - **🧠 Contextual Memory**: Remembers previous turns in the conversation for a natural, flowing dialogue.
 - **☁️ Serverless Architecture**: Built on AWS Lambda with container images, scaling to 1000+ concurrent requests with zero infrastructure management.
-- **⚡ Real-time Streaming**: Powered by AWS Bedrock for fast, streaming responses.
 
 ---
 
@@ -153,7 +154,8 @@ See [**TESTING.md**](./TESTING.md) for detailed testing strategies.
 | Component | Technology |
 |-----------|------------|
 | **Backend** | FastAPI, Python 3.11 |
-| **AI / LLM** | AWS Bedrock (Claude 3 Sonnet) |
+| **AI / LLM** | AWS Bedrock (Claude 3 Sonnet), LangChain |
+| **Vector DB** | Pinecone (Memory & RAG) |
 | **Orchestration** | Custom Multi-Agent Swarm |
 | **Mobile** | Android (Kotlin, Jetpack Compose) |
 | **Infrastructure** | AWS Lambda (Docker), ECR |
@@ -167,7 +169,9 @@ See [**TESTING.md**](./TESTING.md) for detailed testing strategies.
 - [x] **Contextual Conversation**
 - [x] **Automated Code Improvements**
 - [x] **Android Client**
-- [ ] **RAG Integration** (Vector DB for knowledge retrieval)
+- [x] **Hybrid AI (Local + Cloud)**
+- [x] **Agent Memory Tool (Pinecone)**
+- [ ] **Full RAG Integration**
 - [ ] **IDE Plugin** (IntelliJ/VS Code)
 - [ ] **User Authentication** (Cognito/Auth0)
 
